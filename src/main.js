@@ -62,7 +62,7 @@ const stormSystem = setupStormMarkers(scene);
 
 // --- SATELLITE LIMIT & CACHE STATE ---
 let currentGroup = 'active';
-let currentSatelliteLimit = 1000;
+let currentSatelliteLimit = 5000;
 let fullGroupCache = []
 
 const SATELLITE_LEGEND_ITEMS = [
@@ -300,33 +300,48 @@ function getSatelliteColorHex(jsonData) {
 function buildSatelliteMeshes() {
     const satKeys = Object.keys(satelliteDataMap);
     const numSatellites = satKeys.length;
+    
+    // 1. Clean up existing mesh from the previous chunk/load
+    if (satInstancedMesh) {
+        scene.remove(satInstancedMesh);
+        satInstancedMesh.dispose();
+    }
+
+    // 2. Clear trails and tracking array
+    // We only remove trail lines if we are doing a fresh build
+    activeSatellites.forEach(sat => {
+        if (sat.trailLine) {
+            scene.remove(sat.trailLine);
+            sat.trailGeometry.dispose();
+        }
+    });
+    activeSatellites.length = 0;
+
     const now = new Date();
     const gmstNow = satellite.gstime(now);
 
-    // 1. Create the InstancedMesh (Geometry, Material, Count)
+    // 3. Create the new InstancedMesh for the current total count
     satInstancedMesh = new THREE.InstancedMesh(sharedSatGeometry, sharedSatMaterial, numSatellites);
     satInstancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-
     satInstancedMesh.frustumCulled = false;
-
     scene.add(satInstancedMesh);
 
     const renderTrails = numSatellites < RENDER_TRAILS_THRESHOLD;
     const satColor = new THREE.Color();
 
+    // 4. Populate the mesh and tracking array
     for (let index = 0; index < satKeys.length; index += 1) {
         const satId = satKeys[index];
         const jsonData = satelliteDataMap[satId];
         const satrec = satellite.json2satrec(jsonData);
+        
         satColor.setHex(getSatelliteColorHex(jsonData));
-
-        // 2. Set the geopolitical color for this specific instance
         satInstancedMesh.setColorAt(index, satColor);
 
         let trailGeo = null;
         let trailLine = null;
 
-        // 3. Only build heavy Line2 trails if we have a small number of satellites
+        // Only build trails for small datasets to maintain performance
         if (renderTrails) {
             const trailColors = [];
             const colorHelper = new THREE.Color();
@@ -348,6 +363,7 @@ function buildSatelliteMeshes() {
         let altitudeKm = 0;
         let speedKms = 0;
         let angleDeg = 0;
+
         if (posAndVel.position && !Number.isNaN(posAndVel.position.x)) {
             const posGd = satellite.eciToGeodetic(posAndVel.position, gmstNow);
             const r = 1 + (posGd.height / EARTH_RADIUS_KM);
@@ -375,9 +391,9 @@ function buildSatelliteMeshes() {
         activeSatellites.push({
             id: satId,
             satrec: satrec,
-            index: index, // Store its index in the InstancedMesh
+            index: index, 
             trailGeometry: trailGeo,
-            trailLine: trailLine, // Store the line so we can delete it later
+            trailLine: trailLine, 
             trailPositions: trailGeo ? new Float32Array(TRAIL_POINTS * 3) : null,
             altitudeKm,
             speedKms,
@@ -385,7 +401,7 @@ function buildSatelliteMeshes() {
         });
     }
 
-    // Tell Three.js we updated the colors
+    // 5. Commit updates to GPU
     if (satInstancedMesh.instanceColor) {
         satInstancedMesh.instanceColor.needsUpdate = true;
     }
@@ -420,41 +436,53 @@ function clearSatellites() {
 
 async function loadSatellites(group = "active") {
     const loadToken = ++satelliteLoadToken;
-    if (satelliteLoadController) {
-        satelliteLoadController.abort();
-    }
+    const CHUNK_SIZE = 500;
+    let loadedCount = 0;
+
+    if (satelliteLoadController) satelliteLoadController.abort();
     satelliteLoadController = new AbortController();
 
     try {
-        // Pass the global currentSatelliteLimit to the service
-        const limitedArray = await service.getAllSatellites(group, currentSatelliteLimit, {
-            signal: satelliteLoadController.signal,
-        });
-        
-        if (loadToken !== satelliteLoadToken) {
-            return;
+        // Clear existing satellites immediately for a fresh start
+        clearSatellites();
+
+        while (loadedCount < currentSatelliteLimit) {
+            // Calculate how many to fetch in this batch
+            const remaining = currentSatelliteLimit - loadedCount;
+            const limitToFetch = Math.min(CHUNK_SIZE, remaining);
+
+            const chunk = await service.getAllSatellites(
+                group, 
+                limitToFetch, 
+                { 
+                    offset: loadedCount, // Pass the offset to the service
+                    signal: satelliteLoadController.signal 
+                }
+            );
+
+            if (loadToken !== satelliteLoadToken || chunk.length === 0) break;
+
+            // Add this chunk to our data map
+            chunk.forEach(sat => {
+                satelliteDataMap[sat.OBJECT_ID] = sat;
+            });
+
+            loadedCount += chunk.length;
+            
+            // Rebuild meshes immediately so the user sees progress!
+            buildSatelliteMeshes();
+            
+            console.log(`Progress: ${loadedCount}/${currentSatelliteLimit} loaded.`);
+            
+            // Small delay to keep the UI thread responsive
+            await new Promise(r => setTimeout(r, 10));
         }
 
-        for (let i = 0; i < limitedArray.length; i += 1) {
-            const satelliteObj = limitedArray[i];
-            satelliteDataMap[satelliteObj.OBJECT_ID] = satelliteObj;
-        }
-
-        // Removed the outdated fullGroupCache reference
-        console.log(`Successfully fetched and rendered ${limitedArray.length} satellites.`);
-        
-        buildSatelliteMeshes();
         initializeSidebar();
 
     } catch (error) {
-        if (error?.name === 'AbortError') {
-            return;
-        }
+        if (error?.name === 'AbortError') return;
         console.error("Failed to load satellites.", error);
-    } finally {
-        if (loadToken === satelliteLoadToken) {
-            satelliteLoadController = null;
-        }
     }
 }
 

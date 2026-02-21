@@ -7,9 +7,8 @@ let fallback = false;
 const satelliteGroupCache = new Map();
 const inflightSatelliteRequests = new Map();
 
-// 1. Add limit to the URL builder
-function buildSatellitesUrl(baseUrl, group, limit) {
-  const params = new URLSearchParams({ group, limit });
+function buildSatellitesUrl(baseUrl, group, limit, offset = 0) {
+  const params = new URLSearchParams({ group, limit, offset });
   return `${baseUrl}/satellites?${params.toString()}`;
 }
 
@@ -72,14 +71,14 @@ async function fetchJson(url, { signal, timeoutMs } = {}) {
 }
 
 // 2. Pass limit through the fallback handler
-async function fetchSatellitesWithFallback(group, limit, signal) {
-  const remoteUrl = buildSatellitesUrl(REMOTE_API_BASE, group, limit);
+async function fetchSatellitesWithFallback(group, limit, offset, signal) {
+  const remoteUrl = buildSatellitesUrl(REMOTE_API_BASE, group, limit, offset);
   console.log(remoteUrl);
   if (fallback) {
     return fetchJson(remoteUrl, { signal });
   }
 
-  const localUrl = buildSatellitesUrl(LOCAL_API_BASE, group, limit);
+  const localUrl = buildSatellitesUrl(LOCAL_API_BASE, group, limit, offset);
   try {
     return await fetchJson(localUrl, {
       signal,
@@ -97,35 +96,29 @@ async function fetchSatellitesWithFallback(group, limit, signal) {
 
 /**
  * Fetch satellites by CelesTrak group
- * @param {string} group - CelesTrak group (visual, active, stations, weather, etc.)
- * @param {number} limit - Maximum number of satellites to fetch
- * @returns {Promise<Array>} Array of satellite data
  */
 export const getAllSatellites = async (group = 'visual', limit = 1000, options = {}) => {
-  const { signal = undefined, forceRefresh = false } = options;
+  // 1. Extract offset from options, default to 0
+  const { signal = undefined, forceRefresh = false, offset = 0 } = options;
   
-  // 3. Update the cache key so different limits don't overwrite each other
-  const cacheKey = `${group}-${limit}`;
+  // 2. Include offset in the cache key so chunks are cached uniquely
+  const cacheKey = `${group}-${limit}-${offset}`;
 
   if (!forceRefresh) {
     const cached = getCachedGroup(cacheKey);
-    if (cached) {
-      return cached;
-    }
+    if (cached) return cached;
   }
 
   const canDeduplicate = !signal && !forceRefresh;
   if (canDeduplicate) {
     const existingRequest = inflightSatelliteRequests.get(cacheKey);
-    if (existingRequest) {
-      return existingRequest;
-    }
+    if (existingRequest) return existingRequest;
   }
 
   const requestPromise = (async () => {
     try {
-      // 4. Pass the limit into the fetch handler
-      const data = await fetchSatellitesWithFallback(group, limit, signal);
+      // 3. Pass offset into the fetch handler
+      const data = await fetchSatellitesWithFallback(group, limit, offset, signal);
       setCachedGroup(cacheKey, data);
       return data;
     } catch (error) {
@@ -136,9 +129,7 @@ export const getAllSatellites = async (group = 'visual', limit = 1000, options =
     }
   })();
 
-  if (!canDeduplicate) {
-    return requestPromise;
-  }
+  if (!canDeduplicate) return requestPromise;
 
   inflightSatelliteRequests.set(cacheKey, requestPromise);
   try {
