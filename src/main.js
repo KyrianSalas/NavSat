@@ -745,10 +745,11 @@ function updateSatelliteCallout() {
     return;
   }
 
-  const width = window.innerWidth;
-  const height = window.innerHeight;
-  const satX = (projectedSatelliteScreen.x * 0.5 + 0.5) * width;
-  const satY = (-projectedSatelliteScreen.y * 0.5 + 0.5) * height;
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  const canvasRect = renderer.domElement.getBoundingClientRect();
+  const satX = canvasRect.left + (projectedSatelliteScreen.x * 0.5 + 0.5) * canvasRect.width;
+  const satY = canvasRect.top + (-projectedSatelliteScreen.y * 0.5 + 0.5) * canvasRect.height;
 
   updateCalloutTyping();
 
@@ -756,8 +757,8 @@ function updateSatelliteCallout() {
   const measuredTitleWidth = Math.max(120, measureCalloutTitleWidth(fullTitleText));
   const targetCalloutWidth = THREE.MathUtils.clamp(measuredTitleWidth + 36, 280, 420);
 
-  const targetP0x = THREE.MathUtils.clamp(satX - targetCalloutWidth - 120, 24, width - targetCalloutWidth - 24);
-  const targetP0y = THREE.MathUtils.clamp(satY - 100, 28, height - 170);
+  const targetP0x = THREE.MathUtils.clamp(satX - targetCalloutWidth - 120, 24, viewportWidth - targetCalloutWidth - 24);
+  const targetP0y = THREE.MathUtils.clamp(satY - 100, 28, viewportHeight - 170);
 
   if (!calloutLayout.initialized) {
     calloutLayout.initialized = true;
