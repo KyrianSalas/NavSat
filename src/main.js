@@ -98,6 +98,13 @@ function measureCalloutTitleWidth(text) {
 
 // --------------- SATELLITES ---------------
 
+const dummy = new THREE.Object3D();
+let satInstancedMesh;
+const RENDER_TRAILS_THRESHOLD = 500;
+
+const sharedSatGeometry = new THREE.SphereGeometry(0.005, 8, 8);
+const sharedSatMaterial = new THREE.MeshBasicMaterial({color: 0xffffff});
+
 // The dictionary
 const satelliteDataMap = {};
 const activeSatellites = [];
@@ -123,8 +130,6 @@ const sharedTrailMaterial = new LineMaterial({
 });
 
 sharedTrailMaterial.resolution.set(window.innerWidth, window.innerHeight);
-
-const sharedSatGeometry = new THREE.SphereGeometry(0.005,8,8)
 
 function getSatelliteColor(jsonData) {
     const name = jsonData.OBJECT_NAME.toUpperCase();
@@ -180,52 +185,66 @@ function getSatelliteColor(jsonData) {
 }
 
 function buildSatelliteMeshes() {
-    Object.keys(satelliteDataMap).forEach(satId => {
+    const satKeys = Object.keys(satelliteDataMap);
+    const numSatellites = satKeys.length;
+
+    // 1. Create the InstancedMesh (Geometry, Material, Count)
+    satInstancedMesh = new THREE.InstancedMesh(sharedSatGeometry, sharedSatMaterial, numSatellites);
+    satInstancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+
+    satInstancedMesh.frustumCulled = false;
+
+    scene.add(satInstancedMesh);
+
+    const renderTrails = numSatellites < RENDER_TRAILS_THRESHOLD;
+
+    satKeys.forEach((satId, index) => {
         const jsonData = satelliteDataMap[satId];
         const satrec = satellite.json2satrec(jsonData);
         const satColor = getSatelliteColor(jsonData);
 
-        const trailColors = [];
-        const colorHelper = new THREE.Color();
-        for (let i = 0; i < TRAIL_POINTS; i++) {
-            const t = i / (TRAIL_POINTS - 1);
-            const intensity = Math.pow(t, 2.0);
+        // 2. Set the geopolitical color for this specific instance
+        satInstancedMesh.setColorAt(index, satColor);
 
-            colorHelper.setRGB(
-                satColor.r * intensity,
-                satColor.g * intensity,
-                satColor.b * intensity
-            );
+        let trailGeo = null;
+        let trailLine = null;
 
-            trailColors.push(colorHelper.r, colorHelper.g, colorHelper.b)
+        // 3. Only build heavy Line2 trails if we have a small number of satellites
+        if (renderTrails) {
+            const trailColors = [];
+            const colorHelper = new THREE.Color();
+            for (let i = 0; i < TRAIL_POINTS; i++) {
+                const t = i / (TRAIL_POINTS - 1);
+                const intensity = Math.pow(t, 2.0);
+                colorHelper.setRGB(satColor.r * intensity, satColor.g * intensity, satColor.b * intensity);
+                trailColors.push(colorHelper.r, colorHelper.g, colorHelper.b);
+            }
+
+            trailGeo = new LineGeometry();
+            trailGeo.setPositions(initialPositions);
+            trailGeo.setColors(trailColors);
+            trailLine = new Line2(trailGeo, sharedTrailMaterial);
+            scene.add(trailLine);
         }
-
-        const trailGeo = new LineGeometry();
-        trailGeo.setPositions(initialPositions);
-        trailGeo.setColors(trailColors); // Or your custom colors from the previous step!
-
-        const trailLine = new Line2(trailGeo, sharedTrailMaterial);
-        scene.add(trailLine);
-
-        const uniqueSatMaterial = new THREE.MeshBasicMaterial({color: satColor});
-        const satMesh = new THREE.Mesh(sharedSatGeometry, uniqueSatMaterial);
-        scene.add(satMesh);
 
         activeSatellites.push({
             id: satId,
             satrec: satrec,
-            mesh: satMesh,
+            index: index, // Store its index in the InstancedMesh
             trailGeometry: trailGeo,
             altitudeKm: 0,
             speedKms: 0,
             angleDeg: 0
         });
     });
+
+    // Tell Three.js we updated the colors
+    satInstancedMesh.instanceColor.needsUpdate = true;
 }
 
 async function loadSatellites() {
     try {
-        const jsonArray = await service.getAllSatellites("stations");
+        const jsonArray = await service.getAllSatellites("active");
 
         jsonArray.forEach(satelliteObj => {
             satelliteDataMap[satelliteObj.OBJECT_ID] = satelliteObj;
@@ -248,57 +267,62 @@ function updateSatellites() {
 
     // Loop through every active satellite
     activeSatellites.forEach(sat => {
-        const flatPositionsArray = [];
-
         // A. Update the Main Satellite Dot
         const posAndVel = satellite.propagate(sat.satrec, now);
         if (posAndVel.position) {
             const gmst = satellite.gstime(now);
             const posGd = satellite.eciToGeodetic(posAndVel.position, gmst);
             const r = 1 + (posGd.height / 6371);
-            sat.mesh.position.set(
-                r * Math.cos(posGd.latitude) * Math.cos(posGd.longitude),
-                r * Math.sin(posGd.latitude),
-                r * Math.cos(posGd.latitude) * Math.sin(-posGd.longitude)
-            );
-            sat.altitudeKm = posGd.height;
 
+            const x = r * Math.cos(posGd.latitude) * Math.cos(posGd.longitude);
+            const y = r * Math.sin(posGd.latitude);
+            const z = r * Math.cos(posGd.latitude) * Math.sin(-posGd.longitude);
+
+            // Set the dummy position and update the InstancedMesh at this satellite's index
+            dummy.position.set(x, y, z);
+            dummy.updateMatrix();
+            satInstancedMesh.setMatrixAt(sat.index, dummy.matrix);
+
+            sat.altitudeKm = posGd.height;
             if (posAndVel.velocity) {
                 sat.speedKms = Math.sqrt(
-                    (posAndVel.velocity.x * posAndVel.velocity.x) +
-                    (posAndVel.velocity.y * posAndVel.velocity.y) +
-                    (posAndVel.velocity.z * posAndVel.velocity.z)
+                    (posAndVel.velocity.x ** 2) +
+                    (posAndVel.velocity.y ** 2) +
+                    (posAndVel.velocity.z ** 2)
                 );
             }
+            sat.angleDeg = (THREE.MathUtils.radToDeg(Math.atan2(z, x)) + 360) % 360;
 
-            sat.angleDeg = (THREE.MathUtils.radToDeg(Math.atan2(sat.mesh.position.z, sat.mesh.position.x)) + 360) % 360;
-        }
+            // Only do the heavy trail math if the trail geometry actually exists
+            if (sat.trailGeometry) {
+                const flatPositionsArray = [];
+                for (let i = 0; i < TRAIL_POINTS; i++) {
+                    const timeOffsetMs = (TRAIL_POINTS - 1 - i) * (TRAIL_LENGTH_MINUTES * 60000 / TRAIL_POINTS);
+                    const historicalTime = new Date(now.getTime() - timeOffsetMs);
+                    const pastPosVel = satellite.propagate(sat.satrec, historicalTime);
 
-        // B. Dynamically generate the trailing line
-        for (let i = 0; i < TRAIL_POINTS; i++) {
-            const timeOffsetMs = (TRAIL_POINTS - 1 - i) * (TRAIL_LENGTH_MINUTES * 60000 / TRAIL_POINTS);
-            const historicalTime = new Date(now.getTime() - timeOffsetMs);
-            const pastPosVel = satellite.propagate(sat.satrec, historicalTime);
-
-            if (pastPosVel.position) {
-                const pastGmst = satellite.gstime(historicalTime);
-                const pastGd = satellite.eciToGeodetic(pastPosVel.position, pastGmst);
-                const pastR = 1 + (pastGd.height / 6371);
-
-                flatPositionsArray.push(
-                    pastR * Math.cos(pastGd.latitude) * Math.cos(pastGd.longitude),
-                    pastR * Math.sin(pastGd.latitude),
-                    pastR * Math.cos(pastGd.latitude) * Math.sin(-pastGd.longitude)
-                );
-            } else {
-                // Fallback: If SGP4 math fails for an old point, push 0,0,0 to prevent Line2 crashes
-                flatPositionsArray.push(0, 0, 0);
+                    if (pastPosVel.position) {
+                        const pastGmst = satellite.gstime(historicalTime);
+                        const pastGd = satellite.eciToGeodetic(pastPosVel.position, pastGmst);
+                        const pastR = 1 + (pastGd.height / 6371);
+                        flatPositionsArray.push(
+                            pastR * Math.cos(pastGd.latitude) * Math.cos(pastGd.longitude),
+                            pastR * Math.sin(pastGd.latitude),
+                            pastR * Math.cos(pastGd.latitude) * Math.sin(-pastGd.longitude)
+                        );
+                    } else {
+                        flatPositionsArray.push(0, 0, 0);
+                    }
+                }
+                sat.trailGeometry.setPositions(flatPositionsArray);
             }
         }
-
-        // Apply new positions to this specific satellite's trail
-        sat.trailGeometry.setPositions(flatPositionsArray);
     });
+
+    // CRITICAL: Tell the GPU the matrices have moved!
+    if (satInstancedMesh) {
+        satInstancedMesh.instanceMatrix.needsUpdate = true;
+    }
 }
 
 function getSatelliteDetailsText(sat) {
@@ -510,7 +534,12 @@ function updateSatelliteCallout() {
     return;
   }
 
-  projectedSatelliteScreen.copy(selectedSatellite.mesh.position).project(camera);
+  const tempMatrix = new THREE.Matrix4();
+  satInstancedMesh.getMatrixAt(selectedSatellite.index, tempMatrix);
+  const currentPos = new THREE.Vector3().setFromMatrixPosition(tempMatrix);
+
+  // Project that 3D position to the 2D screen
+    projectedSatelliteScreen.copy(currentPos).project(camera);
 
   if (projectedSatelliteScreen.z < -1 || projectedSatelliteScreen.z > 1) {
     infoBox.classList.remove('visible');
@@ -599,8 +628,8 @@ function updateSatelliteCallout() {
 // --- Click handling for satellite selection ---
 function onCanvasClick(event) {
   // Prevent clicks during animation
-  if (isAnimatingCamera) return;
-
+  if (isAnimatingCamera || !satInstancedMesh) return;
+  
   // Calculate mouse position in normalized device coordinates
   const rect = renderer.domElement.getBoundingClientRect();
   mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -610,36 +639,21 @@ function onCanvasClick(event) {
   raycaster.setFromCamera(mouse, camera);
 
   // Check if any satellite is clicked - get all satellite meshes
-  const satelliteMeshes = activeSatellites.map(sat => sat.mesh);
-  const intersects = raycaster.intersectObjects(satelliteMeshes, true);
+  const intersects = raycaster.intersectObject(satInstancedMesh);
 
-  if (intersects.length > 0) {
-    const clickedMesh = intersects[0].object;
-    const clickedSat = activeSatellites.find(sat => sat.mesh === clickedMesh);
+  if (intersects.length > 0 && !selectedSatellite) {
+    // Find which satellite was clicked
+    const instanceId = intersects[0].instanceId;
+    const clickedSat = activeSatellites.find(sat => sat.index === instanceId);
     if (clickedSat) {
-      if (clickedSat === selectedSatellite) {
-        deselectSatellite();
-      } else {
-        selectSatellite(clickedSat);
-      }
-      return;
+      selectSatellite(clickedSat);
     }
-  }
-
-  if (selectedSatellite) {
+  } else if (selectedSatellite) {
     deselectSatellite();
   }
 }
 
 function selectSatellite(sat) {
-  if (sat === selectedSatellite) {
-    return;
-  }
-
-  if (isAnimatingCamera) {
-    return;
-  }
-
   selectedSatellite = sat;
   isAnimatingCamera = true;
   controls.enabled = false;
@@ -649,43 +663,49 @@ function selectSatellite(sat) {
   infoBox.classList.remove('visible');
 
   // Animate camera to focus on satellite
-  const targetDistance = 2;
-  const duration = 1000; // milliseconds
-  const startTime = Date.now();
+    const tempMatrix = new THREE.Matrix4();
+    const targetSatPosition = new THREE.Vector3();
 
-  const startPosition = camera.position.clone();
-  const targetPosition = sat.mesh.position.clone().normalize().multiplyScalar(targetDistance);
+    // Get the matrix for this specific satellite index
+    satInstancedMesh.getMatrixAt(sat.index, tempMatrix);
+    // Extract the position vector from that matrix
+    targetSatPosition.setFromMatrixPosition(tempMatrix);
 
-  const animateCamera = () => {
-    const elapsed = Date.now() - startTime;
-    const progress = Math.min(elapsed / duration, 1);
+    // Animate camera to focus on satellite
+    const targetDistance = 2;
+    const duration = 1000; // milliseconds
+    const startTime = Date.now();
 
-    // Smooth easing function
-    const easeProgress = 1 - Math.pow(1 - progress, 3);
+    const startPosition = camera.position.clone();
+    // Use the extracted position for our target calculations
+    const targetCameraPosition = targetSatPosition.clone().normalize().multiplyScalar(targetDistance);
 
-    camera.position.lerpVectors(startPosition, targetPosition, easeProgress);
-    camera.lookAt(sat.mesh.position);
+    const animateCamera = () => {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(elapsed / duration, 1);
 
-    if (progress < 1) {
-      requestAnimationFrame(animateCamera);
-    } else {
-      isAnimatingCamera = false;
-      startCalloutReveal();
-      const satData = satelliteDataMap[sat.id];
-      if (satData) {
-        startCalloutTyping(satData.OBJECT_NAME, getSatelliteDetailsText(sat));
-      }
-    }
-  };
+        // Smooth easing function
+        const easeProgress = 1 - Math.pow(1 - progress, 3);
 
-  animateCamera();
+        camera.position.lerpVectors(startPosition, targetCameraPosition, easeProgress);
+        camera.lookAt(targetSatPosition); // Look exactly at the satellite
+
+        if (progress < 1) {
+            requestAnimationFrame(animateCamera);
+        } else {
+            isAnimatingCamera = false;
+            startCalloutReveal();
+            const satData = satelliteDataMap[sat.id];
+            if (satData) {
+                startCalloutTyping(satData.OBJECT_NAME, getSatelliteDetailsText(sat));
+            }
+        }
+    };
+
+    animateCamera();
 }
 
 function deselectSatellite() {
-  if (!selectedSatellite) {
-    return;
-  }
-
   selectedSatellite = null;
   isAnimatingCamera = true;
   controls.enabled = false;
@@ -726,7 +746,9 @@ function deselectSatellite() {
 }
 
 // Add click event listener
-renderer.domElement.addEventListener('click', onCanvasClick);
+document.addEventListener('click', (event) => {
+  onCanvasClick(event);
+});
 
 // --- Resize Handling ---
 
