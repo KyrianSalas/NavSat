@@ -57,6 +57,7 @@ const infoBox = document.getElementById('infoBox');
 const infoTitle = document.getElementById('infoTitle');
 const infoCard = document.getElementById('infoCard');
 const satelliteDetails = document.getElementById('satelliteDetails');
+const fireLaserButton = document.getElementById('fireLaserButton');
 const infoConnectorPath = document.getElementById('infoConnectorPath');
 const infoConnectorStart = document.getElementById('infoConnectorStart');
 
@@ -412,6 +413,23 @@ function fireSatelliteLaserAt(targetWorldPoint) {
   }
 }
 
+function fireSelectedSatelliteLaser() {
+  if (!selectedSatellite || isAnimatingCamera) {
+    return;
+  }
+
+  const targetWorldPoint = selectedSatellite.mesh.position.clone().normalize();
+  fireSatelliteLaserAt(targetWorldPoint);
+}
+
+if (fireLaserButton) {
+  fireLaserButton.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    fireSelectedSatelliteLaser();
+  });
+}
+
 function startCalloutTyping(title, details) {
   calloutTyping.titleTarget = title;
   calloutTyping.detailsTarget = details;
@@ -476,6 +494,9 @@ function updateCalloutTyping() {
 function updateSatelliteCallout() {
   if (!selectedSatellite) {
     infoBox.classList.remove('visible');
+    if (fireLaserButton) {
+      fireLaserButton.disabled = true;
+    }
     calloutLayout.initialized = false;
     return;
   }
@@ -483,6 +504,9 @@ function updateSatelliteCallout() {
   // Only render callout once camera transition has settled on target.
   if (isAnimatingCamera) {
     infoBox.classList.remove('visible');
+    if (fireLaserButton) {
+      fireLaserButton.disabled = true;
+    }
     return;
   }
 
@@ -490,6 +514,9 @@ function updateSatelliteCallout() {
 
   if (projectedSatelliteScreen.z < -1 || projectedSatelliteScreen.z > 1) {
     infoBox.classList.remove('visible');
+    if (fireLaserButton) {
+      fireLaserButton.disabled = true;
+    }
     return;
   }
 
@@ -563,6 +590,9 @@ function updateSatelliteCallout() {
   infoConnectorStart.setAttribute('cx', String(p0x));
   infoConnectorStart.setAttribute('cy', String(p0y));
 
+  if (fireLaserButton) {
+    fireLaserButton.disabled = false;
+  }
   infoBox.classList.add('visible');
 }
 

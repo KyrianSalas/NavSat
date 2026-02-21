@@ -53,6 +53,7 @@
         box-sizing: border-box;
         position: absolute;
         padding: 4px 12px;
+        pointer-events: auto;
         border-radius: 10px;
         border: 2px solid rgba(24, 245, 255, 0.72);
         background: rgba(2, 20, 49, 0.78);
@@ -67,6 +68,29 @@
       #satelliteDetails {
         margin: 0;
       }
+      #fireLaserButton {
+        margin-top: 10px;
+        padding: 7px 11px;
+        border-radius: 8px;
+        border: 1px solid rgba(24, 245, 255, 0.8);
+        background: rgba(8, 36, 68, 0.9);
+        color: #b9f8ff;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        font-weight: 700;
+        font-size: 12px;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+        cursor: pointer;
+      }
+      #fireLaserButton:hover:enabled {
+        background: rgba(12, 54, 96, 0.95);
+        box-shadow: 0 0 12px rgba(24, 245, 255, 0.3);
+      }
+      #fireLaserButton:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+        box-shadow: none;
+      }
     </style>
   </head>
   <body>
@@ -79,6 +103,7 @@
       <div id="infoTitle"></div>
       <div id="infoCard">
         <p id="satelliteDetails"></p>
+        <button id="fireLaserButton" type="button" disabled>Fire Laser</button>
       </div>
     </div>
     <script type="module" src="/src/main.js"></script>
