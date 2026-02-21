@@ -259,6 +259,111 @@ function getSatelliteDetailsText(sat) {
   return `Distance: ${Math.round(distanceKm)}km\nSpeed: ${speedRatio.toFixed(2)}x\nAngle: ${Math.round(angleDeg)}°`;
 }
 
+const impactFxLayer = new THREE.Group();
+planetVisuals.globe.add(impactFxLayer);
+
+const activeLaserEffects = [];
+const activeImpactEffects = [];
+const impactAlignmentAxis = new THREE.Vector3(0, 0, 1);
+
+function spawnLaserBeam(startWorldPoint, endWorldPoint) {
+  const beamGeometry = new THREE.BufferGeometry().setFromPoints([startWorldPoint, endWorldPoint]);
+  const beamMaterial = new THREE.LineBasicMaterial({
+    color: 0xff5f66,
+    transparent: true,
+    opacity: 0.95,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    toneMapped: false,
+  });
+
+  const beam = new THREE.Line(beamGeometry, beamMaterial);
+  scene.add(beam);
+
+  activeLaserEffects.push({
+    beam,
+    beamGeometry,
+    beamMaterial,
+    startMs: performance.now(),
+    durationMs: 190,
+  });
+}
+
+function spawnImpactPulse(surfaceNormal) {
+  const pulseGeometry = new THREE.RingGeometry(0.006, 0.016, 36);
+  const pulseMaterial = new THREE.MeshBasicMaterial({
+    color: 0x8f7e68,
+    transparent: true,
+    opacity: 0.58,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    toneMapped: false,
+    side: THREE.DoubleSide,
+  });
+
+  const pulse = new THREE.Mesh(pulseGeometry, pulseMaterial);
+  pulse.position.copy(surfaceNormal).multiplyScalar(1.004);
+  pulse.quaternion.setFromUnitVectors(impactAlignmentAxis, surfaceNormal);
+  pulse.renderOrder = 4;
+  impactFxLayer.add(pulse);
+
+  activeImpactEffects.push({
+    pulse,
+    pulseGeometry,
+    pulseMaterial,
+    startMs: performance.now(),
+    durationMs: 340,
+  });
+}
+
+function updateDestructiveEffects() {
+  const nowMs = performance.now();
+
+  for (let i = activeLaserEffects.length - 1; i >= 0; i -= 1) {
+    const effect = activeLaserEffects[i];
+    const progress = (nowMs - effect.startMs) / effect.durationMs;
+
+    if (progress >= 1) {
+      scene.remove(effect.beam);
+      effect.beamGeometry.dispose();
+      effect.beamMaterial.dispose();
+      activeLaserEffects.splice(i, 1);
+      continue;
+    }
+
+    effect.beamMaterial.opacity = 0.95 * (1 - progress);
+  }
+
+  for (let i = activeImpactEffects.length - 1; i >= 0; i -= 1) {
+    const effect = activeImpactEffects[i];
+    const progress = (nowMs - effect.startMs) / effect.durationMs;
+
+    if (progress >= 1) {
+      impactFxLayer.remove(effect.pulse);
+      effect.pulseGeometry.dispose();
+      effect.pulseMaterial.dispose();
+      activeImpactEffects.splice(i, 1);
+      continue;
+    }
+
+    effect.pulse.scale.setScalar(1 + progress * 4);
+    effect.pulseMaterial.opacity = 0.58 * (1 - progress);
+  }
+}
+
+function fireSatelliteLaserAt(targetWorldPoint) {
+  const impactLocalPoint = planetVisuals.globe.worldToLocal(targetWorldPoint.clone());
+  const surfaceNormal = impactLocalPoint.normalize();
+
+  planetVisuals.applyImpactDamage(surfaceNormal);
+  spawnImpactPulse(surfaceNormal);
+
+  if (selectedSatellite) {
+    const impactWorldPoint = planetVisuals.globe.localToWorld(surfaceNormal.clone().multiplyScalar(1.006));
+    spawnLaserBeam(selectedSatellite.mesh.position.clone(), impactWorldPoint);
+  }
+}
+
 function startCalloutTyping(title, details) {
   calloutTyping.titleTarget = title;
   calloutTyping.detailsTarget = details;
@@ -417,7 +522,7 @@ function updateSatelliteCallout() {
 function onCanvasClick(event) {
   // Prevent clicks during animation
   if (isAnimatingCamera) return;
-  
+
   // Calculate mouse position in normalized device coordinates
   const rect = renderer.domElement.getBoundingClientRect();
   mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -430,19 +535,39 @@ function onCanvasClick(event) {
   const satelliteMeshes = activeSatellites.map(sat => sat.mesh);
   const intersects = raycaster.intersectObjects(satelliteMeshes, true);
 
-  if (intersects.length > 0 && !selectedSatellite) {
-    // Find which satellite was clicked
+  if (intersects.length > 0) {
     const clickedMesh = intersects[0].object;
     const clickedSat = activeSatellites.find(sat => sat.mesh === clickedMesh);
     if (clickedSat) {
-      selectSatellite(clickedSat);
+      if (clickedSat === selectedSatellite) {
+        deselectSatellite();
+      } else {
+        selectSatellite(clickedSat);
+      }
+      return;
     }
-  } else if (selectedSatellite) {
+  }
+
+  const planetIntersections = raycaster.intersectObject(planetVisuals.globe, false);
+  if (planetIntersections.length > 0) {
+    fireSatelliteLaserAt(planetIntersections[0].point);
+    return;
+  }
+
+  if (selectedSatellite) {
     deselectSatellite();
   }
 }
 
 function selectSatellite(sat) {
+  if (sat === selectedSatellite) {
+    return;
+  }
+
+  if (isAnimatingCamera) {
+    return;
+  }
+
   selectedSatellite = sat;
   isAnimatingCamera = true;
   controls.enabled = false;
@@ -485,6 +610,10 @@ function selectSatellite(sat) {
 }
 
 function deselectSatellite() {
+  if (!selectedSatellite) {
+    return;
+  }
+
   selectedSatellite = null;
   isAnimatingCamera = true;
   controls.enabled = false;
@@ -525,9 +654,7 @@ function deselectSatellite() {
 }
 
 // Add click event listener
-document.addEventListener('click', (event) => {
-  onCanvasClick(event);
-});
+renderer.domElement.addEventListener('click', onCanvasClick);
 
 // --- Resize Handling ---
 
@@ -544,6 +671,7 @@ window.addEventListener('resize', () => {
 renderer.setAnimationLoop(() => {
     updateSatellites();
     planetVisuals.update();
+    updateDestructiveEffects();
     updateSatelliteCallout();
     controls.update();
     planetVisuals.render();
