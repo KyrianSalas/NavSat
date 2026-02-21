@@ -16,10 +16,10 @@ export function ensureSidebarStyles() {
       --card-bg: linear-gradient(160deg, rgba(15, 25, 46, 0.88), rgba(10, 19, 35, 0.6));
       --card-border: rgba(162, 197, 255, 0.22);
       position: fixed;
-      top: 0;
+      top: 50px;
       right: 0;
       width: 320px;
-      height: 100vh;
+      height: calc(100vh - 50px);
       box-sizing: border-box;
       display: flex;
       flex-direction: column;
@@ -29,7 +29,7 @@ export function ensureSidebarStyles() {
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
       box-shadow: -12px 0 36px rgba(2, 6, 16, 0.35);
-      z-index: 20;
+      z-index: 101;
       overflow: hidden;
       transition: width 0.2s ease, padding 0.2s ease, background 0.2s ease;
     }
@@ -54,9 +54,10 @@ export function ensureSidebarStyles() {
     }
 
     #${SIDEBAR_ID}.is-collapsed .sidebar-topbar {
-      position: absolute;
-      top: 8px;
+      position: fixed;
+      top: 50%;
       right: 8px;
+      transform: translateY(-50%);
       justify-content: center;
       margin-bottom: 0;
     }
@@ -361,6 +362,57 @@ export function ensureSidebarStyles() {
         border-radius: 10px;
       }
     }
+  `;
+
+  document.head.appendChild(styleTag);
+}
+
+export function ensureTopBarStyles() {
+  if (document.getElementById('topbar-style-id')) {
+    return;
+  }
+
+  const styleTag = document.createElement('style');
+  styleTag.id = 'topbar-style-id';
+  styleTag.textContent = `
+    #topBar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 50px;
+      background: rgba(2, 12, 30, 0.2);
+      border-bottom: 3px solid rgba(24, 245, 255, 0.8);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      z-index: 100;
+    }
+
+    #topBar h1 {
+      margin: 0;
+      font-size: 22px;
+      color: #18f5ff;
+      font-weight: 700;
+      font-family: Electrolize, 'Segoe UI', sans-serif;
+      letter-spacing: 0.05em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .header-logo {
+      height: 30px;
+      width: 30px;
+    }
+
+canvas {
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
   `;
 
   document.head.appendChild(styleTag);

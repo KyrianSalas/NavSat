@@ -9,8 +9,12 @@ import { setupPlanetVisuals } from './widgets/planetVisuals.js';
 import { setupSidebar } from './widgets/uiManager.js';
 import { addUserLocationMarker } from './widgets/userLocationMarker.js';
 import { centerToUserLocation } from './widgets/centerToUserLocation.js';
-import { setupGroupSelector } from './widgets/groupSelector.js'; // IMPORT NEW WIDGET
+import { setupGroupSelector } from './widgets/groupSelector.js';
+import { ensureTopBarStyles } from './widgets/ui/styles.js';
 import * as service from './api/satelliteService.js'
+
+// Apply styles
+ensureTopBarStyles();
 
 // --- Renderer ---
 
