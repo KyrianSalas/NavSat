@@ -34,11 +34,9 @@ export async function addUserLocationMarker(scene, options = {}) {
     marker.lookAt(new THREE.Vector3(0, 0, 0));
     marker.rotateX(Math.PI / 2);
     scene.add(marker);
-    
-    console.log(`✓ Marker added at ${latitude.toFixed(2)}°, ${longitude.toFixed(2)}°`);
+
     return { latitude, longitude, marker };
   } catch (error) {
-    console.error('Failed to add marker:', error);
     return null;
   }
 }

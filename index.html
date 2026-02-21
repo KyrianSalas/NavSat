@@ -91,10 +91,47 @@
         cursor: not-allowed;
         box-shadow: none;
       }
+      #centerLocationButton {
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        width: 48px;
+        height: 48px;
+        padding: 0;
+        border-radius: 50%;
+        border: 2px solid rgba(24, 245, 255, 0.8);
+        background: rgba(8, 36, 68, 0.95);
+        color: #18f5ff;
+        font-size: 24px;
+        cursor: pointer;
+        z-index: 10;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      }
+      #centerLocationButton:hover {
+        background: rgba(12, 54, 96, 1);
+        box-shadow: 0 0 20px rgba(24, 245, 255, 0.5), 0 4px 12px rgba(0, 0, 0, 0.4);
+        transform: scale(1.05);
+      }
+      #centerLocationButton:active {
+        transform: scale(0.95);
+      }
     </style>
   </head>
   <body>
     <canvas id="canvas"></canvas>
+    <button id="centerLocationButton" type="button" title="Center on my location">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+        <circle cx="12" cy="12" r="3"/>
+        <line x1="12" y1="2" x2="12" y2="6"/>
+        <line x1="12" y1="18" x2="12" y2="22"/>
+        <line x1="2" y1="12" x2="6" y2="12"/>
+        <line x1="18" y1="12" x2="22" y2="12"/>
+      </svg>
+    </button>
     <div id="infoBox">
       <svg id="infoConnector">
         <polyline id="infoConnectorPath" points="" />
