@@ -8,6 +8,8 @@ export function ensureSidebarStyles() {
   const styleTag = document.createElement('style');
   styleTag.id = SIDEBAR_STYLE_ID;
   styleTag.textContent = `
+    @import url('https://fonts.googleapis.com/css2?family=Electrolize&display=swap');
+
     #${SIDEBAR_ID} {
       --panel-border: rgba(150, 194, 255, 0.22);
       --panel-text: #dceafe;
@@ -92,7 +94,7 @@ export function ensureSidebarStyles() {
       margin: 0;
       padding: 12px 14px 10px;
       color: var(--panel-text);
-      font-family: "Space Grotesk", "Segoe UI", sans-serif;
+      font-family: "Electrolize", "Segoe UI", sans-serif;
       font-size: 11px;
       font-weight: 700;
       letter-spacing: 0.12em;
@@ -106,7 +108,7 @@ export function ensureSidebarStyles() {
       gap: 10px;
       padding: 12px 14px 14px;
       color: #d7e8ff;
-      font-family: "Space Grotesk", "Segoe UI", sans-serif;
+      font-family: "Electrolize", "Segoe UI", sans-serif;
       font-size: 13px;
     }
 
@@ -118,7 +120,7 @@ export function ensureSidebarStyles() {
       background: rgba(6, 14, 28, 0.72);
       color: #e7f0ff;
       padding: 10px 12px;
-      font-family: "Space Grotesk", "Segoe UI", sans-serif;
+      font-family: "Electrolize", "Segoe UI", sans-serif;
       font-size: 13px;
       outline: none;
       transition: border-color 0.15s ease, box-shadow 0.15s ease;
@@ -216,7 +218,7 @@ export function ensureSidebarStyles() {
       font-weight: 700;
       letter-spacing: 0.04em;
       text-transform: uppercase;
-      font-family: "Space Grotesk", "Segoe UI", sans-serif;
+      font-family: "Electrolize", "Segoe UI", sans-serif;
       cursor: pointer;
       transition: background 0.15s ease, border-color 0.15s ease;
     }
