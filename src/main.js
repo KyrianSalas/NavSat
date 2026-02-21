@@ -47,8 +47,8 @@ addUserLocationMarker(scene);
 // --- Raycaster for click detection ---
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
-let selectedSatellite = null;
-let isAnimatingCamera = false;
+const selectedSatelliteRef = { current: null };
+const isAnimatingCameraRef = { current: false };
 
 // --- User location --- epic formatted comment
 const location = getUserLocation();
@@ -167,7 +167,7 @@ function startCalloutReveal() {
 // --- Click handling for satellite selection ---
 function onCanvasClick(event) {
   // Prevent clicks during animation
-  if (isAnimatingCamera) return;
+  if (isAnimatingCameraRef.current) return;
   
   // Calculate mouse position in normalized device coordinates
   const rect = renderer.domElement.getBoundingClientRect();
@@ -181,21 +181,21 @@ function onCanvasClick(event) {
   const satelliteMeshes = activeSatellites.map(sat => sat.mesh);
   const intersects = raycaster.intersectObjects(satelliteMeshes, true);
 
-  if (intersects.length > 0 && !selectedSatellite) {
+  if (intersects.length > 0 && !selectedSatelliteRef.current) {
     // Find which satellite was clicked
     const clickedMesh = intersects[0].object;
     const clickedSat = activeSatellites.find(sat => sat.mesh === clickedMesh);
     if (clickedSat) {
       selectSatellite(clickedSat);
     }
-  } else if (selectedSatellite) {
+  } else if (selectedSatelliteRef.current) {
     deselectSatellite();
   }
 }
 
 function selectSatellite(sat) {
-  selectedSatellite = sat;
-  isAnimatingCamera = true;
+  selectedSatelliteRef.current = sat;
+  isAnimatingCameraRef.current = true;
   controls.enabled = false;
   calloutLayout.initialized = false;
   calloutReveal.active = false;
@@ -223,7 +223,7 @@ function selectSatellite(sat) {
     if (progress < 1) {
       requestAnimationFrame(animateCamera);
     } else {
-      isAnimatingCamera = false;
+      isAnimatingCameraRef.current = false;
       startCalloutReveal();
       const satData = satelliteDataMap[sat.id];
       if (satData) {
@@ -236,8 +236,8 @@ function selectSatellite(sat) {
 }
 
 function deselectSatellite() {
-  selectedSatellite = null;
-  isAnimatingCamera = true;
+  selectedSatelliteRef.current = null;
+  isAnimatingCameraRef.current = true;
   controls.enabled = false;
   calloutTyping.active = false;
   calloutLayout.initialized = false;
@@ -267,7 +267,7 @@ function deselectSatellite() {
     if (progress < 1) {
       requestAnimationFrame(animateCamera);
     } else {
-      isAnimatingCamera = false;
+      isAnimatingCameraRef.current = false;
       controls.enabled = true;
     }
   };
@@ -298,8 +298,8 @@ startAnimationLoop({
     TRAIL_POINTS,
     TRAIL_LENGTH_MINUTES,
     planetVisuals,
-    selectedSatellite,
-    isAnimatingCamera,
+    selectedSatelliteRef,
+    isAnimatingCameraRef,
     infoBox,
     calloutLayout,
     projectedSatelliteScreen,

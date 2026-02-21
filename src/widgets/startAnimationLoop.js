@@ -8,8 +8,8 @@ export function startAnimationLoop(params) {
         TRAIL_POINTS,
         TRAIL_LENGTH_MINUTES,
         planetVisuals,
-        selectedSatellite,
-        isAnimatingCamera,
+        selectedSatelliteRef,
+        isAnimatingCameraRef,
         infoBox,
         calloutLayout,
         projectedSatelliteScreen,
@@ -29,8 +29,8 @@ export function startAnimationLoop(params) {
         updateSatellites({ activeSatellites, TRAIL_POINTS, TRAIL_LENGTH_MINUTES });
         planetVisuals.update();
         updateSatelliteCallout({
-            selectedSatellite,
-            isAnimatingCamera,
+            selectedSatellite: selectedSatelliteRef.current,
+            isAnimatingCamera: isAnimatingCameraRef.current,
             infoBox,
             calloutLayout,
             projectedSatelliteScreen,
