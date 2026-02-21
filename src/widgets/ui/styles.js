@@ -537,17 +537,17 @@ export function ensureTopBarStyles() {
       font-family: Electrolize, 'Segoe UI', sans-serif;
       margin-left: 24px;
       padding: 4px 8px;
-      border-bottom: 1px solid transparent;
-      transition: border-color 0.2s ease, color 0.2s ease;
+      border-bottom: none;
+      transition: color 0.2s ease, opacity 0.2s ease;
     }
 
     #topBar a:hover {
-      border-bottom-color: #18f5ff;
+      opacity: 0.85;
     }
 
     #topBar a:focus-visible {
       outline: none;
-      border-bottom-color: #18f5ff;
+      opacity: 0.85;
     }
 
     .header-logo {
