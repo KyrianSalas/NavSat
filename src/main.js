@@ -39,6 +39,49 @@ const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 let selectedSatellite = null;
 let isAnimatingCamera = false;
+const projectedSatelliteScreen = new THREE.Vector3();
+
+const infoBox = document.getElementById('infoBox');
+const infoTitle = document.getElementById('infoTitle');
+const infoCard = document.getElementById('infoCard');
+const satelliteDetails = document.getElementById('satelliteDetails');
+const infoConnectorPath = document.getElementById('infoConnectorPath');
+const infoConnectorStart = document.getElementById('infoConnectorStart');
+
+const calloutTyping = {
+  titleTarget: '',
+  detailsTarget: '',
+  titleIndex: 0,
+  detailsIndex: 0,
+  lastStepMs: 0,
+  stepIntervalMs: 18,
+  active: false,
+};
+
+const calloutLayout = {
+  initialized: false,
+  p0x: 0,
+  p0y: 0,
+  width: 220,
+};
+
+const calloutReveal = {
+  active: false,
+  startMs: 0,
+  durationMs: 360,
+  progress: 1,
+};
+
+const titleMeasureCanvas = document.createElement('canvas');
+const titleMeasureContext = titleMeasureCanvas.getContext('2d');
+
+function measureCalloutTitleWidth(text) {
+  if (!titleMeasureContext || !text) {
+    return 120;
+  }
+  titleMeasureContext.font = '700 24px "Segoe UI", Tahoma, Geneva, Verdana, sans-serif';
+  return titleMeasureContext.measureText(text).width;
+}
 
 // --------------- SATELLITES ---------------
 
@@ -123,7 +166,10 @@ function buildSatelliteMeshes() {
             id: satId,
             satrec: satrec,
             mesh: satMesh,
-            trailGeometry: trailGeo
+            trailGeometry: trailGeo,
+            altitudeKm: 0,
+            speedKms: 0,
+            angleDeg: 0
         });
     });
 }
@@ -166,6 +212,17 @@ function updateSatellites() {
                 r * Math.sin(posGd.latitude),
                 r * Math.cos(posGd.latitude) * Math.sin(-posGd.longitude)
             );
+            sat.altitudeKm = posGd.height;
+
+            if (posAndVel.velocity) {
+                sat.speedKms = Math.sqrt(
+                    (posAndVel.velocity.x * posAndVel.velocity.x) +
+                    (posAndVel.velocity.y * posAndVel.velocity.y) +
+                    (posAndVel.velocity.z * posAndVel.velocity.z)
+                );
+            }
+
+            sat.angleDeg = (THREE.MathUtils.radToDeg(Math.atan2(sat.mesh.position.z, sat.mesh.position.x)) + 360) % 360;
         }
 
         // B. Dynamically generate the trailing line
@@ -193,6 +250,167 @@ function updateSatellites() {
         // Apply new positions to this specific satellite's trail
         sat.trailGeometry.setPositions(flatPositionsArray);
     });
+}
+
+function getSatelliteDetailsText(sat) {
+  const distanceKm = Math.max(0, sat.altitudeKm || 0);
+  const speedRatio = Math.max(0, (sat.speedKms || 0) / 12.8);
+  const angleDeg = ((sat.angleDeg || 0) + 360) % 360;
+  return `Distance: ${Math.round(distanceKm)}km\nSpeed: ${speedRatio.toFixed(2)}x\nAngle: ${Math.round(angleDeg)}°`;
+}
+
+function startCalloutTyping(title, details) {
+  calloutTyping.titleTarget = title;
+  calloutTyping.detailsTarget = details;
+  calloutTyping.titleIndex = 0;
+  calloutTyping.detailsIndex = 0;
+  calloutTyping.lastStepMs = performance.now();
+  calloutTyping.active = true;
+  infoTitle.textContent = '';
+  satelliteDetails.textContent = '';
+}
+
+function startCalloutReveal() {
+  calloutReveal.active = true;
+  calloutReveal.startMs = performance.now();
+  calloutReveal.progress = 0;
+}
+
+function updateCalloutReveal() {
+  if (!calloutReveal.active) {
+    return calloutReveal.progress;
+  }
+
+  const elapsed = performance.now() - calloutReveal.startMs;
+  const linear = THREE.MathUtils.clamp(elapsed / calloutReveal.durationMs, 0, 1);
+  const eased = 1 - Math.pow(1 - linear, 3);
+  calloutReveal.progress = eased;
+
+  if (linear >= 1) {
+    calloutReveal.active = false;
+    calloutReveal.progress = 1;
+  }
+
+  return calloutReveal.progress;
+}
+
+function updateCalloutTyping() {
+  if (!calloutTyping.active) {
+    return;
+  }
+
+  const nowMs = performance.now();
+  while (nowMs - calloutTyping.lastStepMs >= calloutTyping.stepIntervalMs) {
+    calloutTyping.lastStepMs += calloutTyping.stepIntervalMs;
+
+    if (calloutTyping.titleIndex < calloutTyping.titleTarget.length) {
+      calloutTyping.titleIndex += 1;
+      infoTitle.textContent = calloutTyping.titleTarget.slice(0, calloutTyping.titleIndex);
+      continue;
+    }
+
+    if (calloutTyping.detailsIndex < calloutTyping.detailsTarget.length) {
+      calloutTyping.detailsIndex += 1;
+      satelliteDetails.textContent = calloutTyping.detailsTarget.slice(0, calloutTyping.detailsIndex);
+      continue;
+    }
+
+    calloutTyping.active = false;
+    break;
+  }
+}
+
+function updateSatelliteCallout() {
+  if (!selectedSatellite) {
+    infoBox.classList.remove('visible');
+    calloutLayout.initialized = false;
+    return;
+  }
+
+  // Only render callout once camera transition has settled on target.
+  if (isAnimatingCamera) {
+    infoBox.classList.remove('visible');
+    return;
+  }
+
+  projectedSatelliteScreen.copy(selectedSatellite.mesh.position).project(camera);
+
+  if (projectedSatelliteScreen.z < -1 || projectedSatelliteScreen.z > 1) {
+    infoBox.classList.remove('visible');
+    return;
+  }
+
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+  const satX = (projectedSatelliteScreen.x * 0.5 + 0.5) * width;
+  const satY = (-projectedSatelliteScreen.y * 0.5 + 0.5) * height;
+
+  updateCalloutTyping();
+
+  const fullTitleText = calloutTyping.titleTarget || infoTitle.textContent || '';
+  const measuredTitleWidth = Math.max(120, measureCalloutTitleWidth(fullTitleText));
+  const targetCalloutWidth = THREE.MathUtils.clamp(measuredTitleWidth + 36, 180, 300);
+
+  const targetP0x = THREE.MathUtils.clamp(satX - targetCalloutWidth - 120, 24, width - targetCalloutWidth - 24);
+  const targetP0y = THREE.MathUtils.clamp(satY - 100, 28, height - 170);
+
+  if (!calloutLayout.initialized) {
+    calloutLayout.initialized = true;
+    calloutLayout.p0x = targetP0x;
+    calloutLayout.p0y = targetP0y;
+    calloutLayout.width = targetCalloutWidth;
+  } else {
+    const follow = isAnimatingCamera ? 0.2 : 0.35;
+    calloutLayout.p0x = THREE.MathUtils.lerp(calloutLayout.p0x, targetP0x, follow);
+    calloutLayout.p0y = THREE.MathUtils.lerp(calloutLayout.p0y, targetP0y, follow);
+    calloutLayout.width = THREE.MathUtils.lerp(calloutLayout.width, targetCalloutWidth, 0.28);
+  }
+
+  const p0x = calloutLayout.p0x;
+  const p0y = calloutLayout.p0y;
+  const calloutWidth = calloutLayout.width;
+  const p1x = p0x + calloutWidth;
+  const p1y = p0y;
+
+  const titleX = p0x + 16;
+  const titleY = p0y - 38;
+  const cardX = p0x;
+  const cardY = p0y + 12;
+
+  infoCard.style.width = `${calloutWidth}px`;
+
+  infoTitle.style.transform = `translate(${titleX}px, ${titleY}px)`;
+  infoCard.style.transform = `translate(${cardX}px, ${cardY}px)`;
+
+  const p3x = satX;
+  const p3y = satY;
+
+  const revealProgress = updateCalloutReveal();
+  const seg1Length = Math.hypot(p1x - p0x, p1y - p0y);
+  const seg2Length = Math.hypot(p3x - p1x, p3y - p1y);
+  const totalLength = Math.max(0.0001, seg1Length + seg2Length);
+  const revealDistance = totalLength * revealProgress;
+
+  let connectorPoints = `${p0x},${p0y} ${p0x},${p0y} ${p0x},${p0y}`;
+
+  if (revealDistance <= seg1Length) {
+    const t = seg1Length > 0 ? revealDistance / seg1Length : 1;
+    const ex = THREE.MathUtils.lerp(p0x, p1x, t);
+    const ey = THREE.MathUtils.lerp(p0y, p1y, t);
+    connectorPoints = `${p0x},${p0y} ${ex},${ey} ${ex},${ey}`;
+  } else {
+    const secondDistance = revealDistance - seg1Length;
+    const t = seg2Length > 0 ? THREE.MathUtils.clamp(secondDistance / seg2Length, 0, 1) : 1;
+    const ex = THREE.MathUtils.lerp(p1x, p3x, t);
+    const ey = THREE.MathUtils.lerp(p1y, p3y, t);
+    connectorPoints = `${p0x},${p0y} ${p1x},${p1y} ${ex},${ey}`;
+  }
+
+  infoConnectorPath.setAttribute('points', connectorPoints);
+  infoConnectorStart.setAttribute('cx', String(p0x));
+  infoConnectorStart.setAttribute('cy', String(p0y));
+
+  infoBox.classList.add('visible');
 }
 
 // --- Click handling for satellite selection ---
@@ -228,15 +446,10 @@ function selectSatellite(sat) {
   selectedSatellite = sat;
   isAnimatingCamera = true;
   controls.enabled = false;
-
-  // Show info box
-  const infoBox = document.getElementById('infoBox');
-  const satelliteDetails = document.getElementById('satelliteDetails');
-  
-  // Get satellite data from the selected satellite
-  const satData = satelliteDataMap[sat.id];
-  satelliteDetails.textContent = satData.OBJECT_NAME + '\n\nNORAD ID: ' + satData.NORAD_CAT_ID;
-  infoBox.classList.add('visible');
+  calloutLayout.initialized = false;
+  calloutReveal.active = false;
+  calloutReveal.progress = 0;
+  infoBox.classList.remove('visible');
 
   // Animate camera to focus on satellite
   const targetDistance = 2;
@@ -260,6 +473,11 @@ function selectSatellite(sat) {
       requestAnimationFrame(animateCamera);
     } else {
       isAnimatingCamera = false;
+      startCalloutReveal();
+      const satData = satelliteDataMap[sat.id];
+      if (satData) {
+        startCalloutTyping(satData.OBJECT_NAME, getSatelliteDetailsText(sat));
+      }
     }
   };
 
@@ -270,9 +488,12 @@ function deselectSatellite() {
   selectedSatellite = null;
   isAnimatingCamera = true;
   controls.enabled = false;
+  calloutTyping.active = false;
+  calloutLayout.initialized = false;
+  calloutReveal.active = false;
+  calloutReveal.progress = 0;
 
-  // Hide info box
-  const infoBox = document.getElementById('infoBox');
+  // Hide callout
   infoBox.classList.remove('visible');
 
   // Animate camera back to original position
@@ -305,11 +526,6 @@ function deselectSatellite() {
 
 // Add click event listener
 document.addEventListener('click', (event) => {
-  // Check if click is on the info box
-  const infoBox = document.getElementById('infoBox');
-  if (infoBox && infoBox.contains(event.target)) {
-    return; // Don't deselect if clicking on the box
-  }
   onCanvasClick(event);
 });
 
@@ -328,6 +544,7 @@ window.addEventListener('resize', () => {
 renderer.setAnimationLoop(() => {
     updateSatellites();
     planetVisuals.update();
+    updateSatelliteCallout();
     controls.update();
     planetVisuals.render();
 });
