@@ -19,4 +19,4 @@ def get_top100_satellites():
         print(f"{len(orbital_list)} satellites retrieved")
         return orbital_list
     except Exception as e:
-         HTTPException(status_code=503, detail=f"CelesTrak API error: {str(e)}")
+        HTTPException(status_code=503, detail=f"CelesTrak API error: {str(e)}")
