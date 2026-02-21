@@ -596,12 +596,6 @@ function onCanvasClick(event) {
     }
   }
 
-  const planetIntersections = raycaster.intersectObject(planetVisuals.globe, false);
-  if (planetIntersections.length > 0) {
-    fireSatelliteLaserAt(planetIntersections[0].point);
-    return;
-  }
-
   if (selectedSatellite) {
     deselectSatellite();
   }
