@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 from typing import List
+from services import get_top100_satellites
 
 router = APIRouter()
 
@@ -20,7 +21,10 @@ satellites_db = [
 
 @router.get("/satellites", response_model=List[Satellite])
 def list_satellites():
-	return satellites_db
+	# return satellites_db
+	sat = get_top100_satellites
+	print(sat)
+	return get_top100_satellites()
 
 @router.get("/satellites/{satellite_id}", response_model=Satellite)
 def get_satellite(satellite_id: str):
