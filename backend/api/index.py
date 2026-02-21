@@ -2,7 +2,7 @@ import logging
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routes.satellites import router as satellites_router
+from api.routes.satellites import router as satellites_router
 from core.config import settings
 
 logging.basicConfig(level=logging.INFO)
