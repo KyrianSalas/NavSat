@@ -3,6 +3,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { createPlanetDeformation } from './planetDeformation.js';
 
 export function setupPlanetVisuals({ scene, camera, renderer }) {
   const POST_FX_MODES = [
@@ -146,6 +147,51 @@ export function setupPlanetVisuals({ scene, camera, renderer }) {
     })
   );
   globe.material.onBeforeCompile = (shader) => {
+    shader.uniforms.crustLayerColor = { value: new THREE.Color(0x635746) };
+    shader.uniforms.upperMantleLayerColor = { value: new THREE.Color(0x4d402d) };
+    shader.uniforms.lowerMantleLayerColor = { value: new THREE.Color(0x3b3127) };
+    shader.uniforms.coreLayerColor = { value: new THREE.Color(0x2f2622) };
+    shader.uniforms.damageDepthScale = { value: 0.22 };
+    shader.uniforms.surfaceRadius = { value: 1.0 };
+
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <common>',
+      `#include <common>
+      varying vec3 vDamageLocalPosition;`
+    );
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <begin_vertex>',
+      `#include <begin_vertex>
+      vDamageLocalPosition = position;`
+    );
+
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <common>',
+      `#include <common>
+      varying vec3 vDamageLocalPosition;
+      uniform vec3 crustLayerColor;
+      uniform vec3 upperMantleLayerColor;
+      uniform vec3 lowerMantleLayerColor;
+      uniform vec3 coreLayerColor;
+      uniform float damageDepthScale;
+      uniform float surfaceRadius;`
+    );
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <map_fragment>',
+      `#include <map_fragment>
+      float damageDepth = max(0.0, surfaceRadius - length(vDamageLocalPosition));
+      float damageDepthT = clamp(damageDepth / damageDepthScale, 0.0, 1.0);
+      float damageExposure = smoothstep(0.014, 0.072, damageDepth);
+
+      vec3 layerColor = crustLayerColor;
+      layerColor = mix(layerColor, upperMantleLayerColor, smoothstep(0.22, 0.46, damageDepthT));
+      layerColor = mix(layerColor, lowerMantleLayerColor, smoothstep(0.46, 0.78, damageDepthT));
+      layerColor = mix(layerColor, coreLayerColor, smoothstep(0.78, 1.0, damageDepthT));
+
+      diffuseColor.rgb = mix(diffuseColor.rgb, layerColor, damageExposure);
+      diffuseColor.rgb *= mix(1.0, 0.84, damageExposure);`
+    );
+
     shader.fragmentShader = shader.fragmentShader.replace(
       '#include <roughnessmap_fragment>',
       `
@@ -163,7 +209,7 @@ export function setupPlanetVisuals({ scene, camera, renderer }) {
       #if NUM_DIR_LIGHTS > 0
         float sunNdotL = dot(normal, directionalLights[0].direction);
         float nightMask = 1.0 - smoothstep(-0.30, 0.18, sunNdotL);
-        totalEmissiveRadiance *= nightMask;
+        totalEmissiveRadiance *= nightMask * (1.0 - damageExposure);
 
         float sunsetBand =
           smoothstep(-0.32, -0.02, sunNdotL) *
@@ -208,6 +254,7 @@ export function setupPlanetVisuals({ scene, camera, renderer }) {
     );
   };
   scene.add(cloudLayer);
+  const planetDeformation = createPlanetDeformation({ globe, cloudLayer });
 
   const atmosphereUniforms = {
     sunDirection: { value: new THREE.Vector3(1, 0, 0) },
@@ -350,6 +397,7 @@ export function setupPlanetVisuals({ scene, camera, renderer }) {
 
   function update() {
     cloudLayer.rotation.y += 0.00008;
+    planetDeformation.update();
     updateAtmosphereSunDirection();
   }
 
@@ -372,6 +420,8 @@ export function setupPlanetVisuals({ scene, camera, renderer }) {
   }
 
   return {
+    applyImpactDamage: planetDeformation.applyImpactDamage,
+    globe,
     update,
     render,
     onResize,
