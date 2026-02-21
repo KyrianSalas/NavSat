@@ -10,6 +10,7 @@ import { setupSidebar } from './widgets/uiManager.js';
 import { addUserLocationMarker } from './widgets/userLocationMarker.js';
 import { centerToUserLocation } from './widgets/centerToUserLocation.js';
 import { setupGroupSelector } from './widgets/groupSelector.js';
+import { setupCountrySelector } from './widgets/countrySelector.js';
 import { ensureTopBarStyles } from './widgets/ui/styles.js';
 import { setupStormMarkers } from './widgets/stormMarkers.js';
 import { setupSatelliteLegend } from './widgets/satelliteLegend.js';
@@ -58,6 +59,7 @@ const planetVisuals = setupPlanetVisuals({ scene, camera, renderer });
 // Sidebar will be set up after satellites load
 let sidebarManager = null;
 let groupSelectorConfig = null;
+let countrySelectorConfig = null;
 let satelliteLegend = null;
 const stormSystem = setupStormMarkers(scene);
 
@@ -65,6 +67,7 @@ const stormSystem = setupStormMarkers(scene);
 let currentGroup = 'active';
 let currentSatelliteLimit = 14000;
 let fullGroupCache = []
+let currentCountryFilter = 'all';
 
 const SATELLITE_LEGEND_ITEMS = [
   { label: 'US / NASA / Starlink', color: '#00ffff' },
@@ -122,6 +125,13 @@ function initializeSidebar() {
   if (groupSelectorConfig && sidebarManager && sidebarManager.sidebarContent) {
     setupGroupSelector({
       ...groupSelectorConfig,
+      mountTarget: sidebarManager.sidebarContent,
+    });
+  }
+
+  if (countrySelectorConfig && sidebarManager && sidebarManager.sidebarContent) {
+    setupCountrySelector({
+      ...countrySelectorConfig,
       mountTarget: sidebarManager.sidebarContent,
     });
   }
@@ -281,61 +291,90 @@ const sharedTrailMaterial = new LineMaterial({
 
 sharedTrailMaterial.resolution.set(window.innerWidth, window.innerHeight);
 
+function getSatelliteCountryKey(jsonData) {
+  const name = jsonData.OBJECT_NAME.toUpperCase();
+
+  // 1. Soviet / Russian
+  // COSMOS, SL- (Soviet launchers), INTERCOSMOS, RESURS, OKEAN, ZARYA (ISS module)
+  if (name.includes('COSMOS') || name.startsWith('SL-') ||
+    name.includes('INTERCOSMOS') || name.includes('RESURS') ||
+    name.includes('OKEAN') || name.includes('ZARYA')) {
+    return 'russia';
+  }
+
+  // 2. Chinese
+  // CZ- (Long March), SHIJIAN, YAOGAN, HXMT, CSS (Chinese Space Station), SZ- (Shenzhou)
+  if (name.startsWith('CZ-') || name.includes('SHIJIAN') ||
+    name.includes('YAOGAN') || name.includes('HXMT') ||
+    name.includes('CSS') || name.startsWith('SZ-')) {
+    return 'china';
+  }
+
+  // 3. European Space Agency / Arianespace
+  // ARIANE, ENVISAT, HELIOS
+  if (name.includes('ARIANE') || name.includes('ENVISAT') || 
+      name.includes('HELIOS') || name.includes('ONEWEB')) {
+    return 'esa';
+  }
+
+  // 4. Japanese
+  // H-2A (Launcher), ALOS, ASTRO, AJISAI, MIDORI, XRISM
+  if (name.includes('H-2A') || name.includes('ALOS') ||
+    name.includes('ASTRO') || name.includes('AJISAI') ||
+    name.includes('MIDORI') || name.includes('XRISM')) {
+    return 'japan';
+  }
+
+  // 5. United States / NASA / Commercial US
+  // ATLAS, DELTA, THOR, TITAN, USA, OAO, SERT, SEASAT, AQUA, HST, ACS3
+  if (name.includes('ATLAS') || name.includes('DELTA') ||
+    name.includes('THOR') || name.includes('TITAN') ||
+    name.startsWith('USA ') || name.includes('OAO') ||
+    name.includes('SERT') || name.includes('SEASAT') ||
+    name.includes('AQUA') || name.includes('HST') || name.includes('ACS3') || name.includes('STARLINK')) {
+    return 'us';
+  }
+
+  // 6. Indian
+  // GSLV
+  if (name.includes('GSLV')) {
+    return 'india';
+  }
+
+  return 'other';
+}
+
 function getSatelliteColorHex(jsonData) {
-    const name = jsonData.OBJECT_NAME.toUpperCase();
-
-    // 1. Soviet / Russian (Red)
-    // COSMOS, SL- (Soviet launchers), INTERCOSMOS, RESURS, OKEAN, ZARYA (ISS module)
-    if (name.includes('COSMOS') || name.startsWith('SL-') ||
-        name.includes('INTERCOSMOS') || name.includes('RESURS') ||
-        name.includes('OKEAN') || name.includes('ZARYA')) {
-        return 0xff2222;
-    }
-
-        // 2. Chinese (Gold / Yellow)
-    // CZ- (Long March), SHIJIAN, YAOGAN, HXMT, CSS (Chinese Space Station), SZ- (Shenzhou)
-    else if (name.startsWith('CZ-') || name.includes('SHIJIAN') ||
-        name.includes('YAOGAN') || name.includes('HXMT') ||
-        name.includes('CSS') || name.startsWith('SZ-')) {
-        return 0xffcc00;
-    }
-
-        // 3. European Space Agency / Arianespace (Blue)
-    // ARIANE, ENVISAT, HELIOS
-    else if (name.includes('ARIANE') || name.includes('ENVISAT') || name.includes('HELIOS')) {
-        return 0x3388ff;
-    }
-
-        // 4. Japanese (White)
-    // H-2A (Launcher), ALOS, ASTRO, AJISAI, MIDORI, XRISM
-    else if (name.includes('H-2A') || name.includes('ALOS') ||
-        name.includes('ASTRO') || name.includes('AJISAI') ||
-        name.includes('MIDORI') || name.includes('XRISM')) {
-        return 0xffffff;
-    }
-
-        // 5. United States / NASA / Commercial US (Cyan/Light Blue)
-    // ATLAS, DELTA, THOR, TITAN, USA, OAO, SERT, SEASAT, AQUA, HST, ACS3
-    else if (name.includes('ATLAS') || name.includes('DELTA') ||
-        name.includes('THOR') || name.includes('TITAN') ||
-        name.startsWith('USA ') || name.includes('OAO') ||
-        name.includes('SERT') || name.includes('SEASAT') ||
-        name.includes('AQUA') || name.includes('HST') || name.includes('ACS3') || name.includes('STARLINK')) {
-        return 0x00ffff;
-    }
-
-        // 6. Indian (Orange)
-    // GSLV
-    else if (name.includes('GSLV')) {
-        return 0xff8800;
-    }
-
-    // Default Fallback for anything else (e.g., SAOCOM, ISIS, etc.) (Grey/Purple)
-    return 0xcc55ff;
+  const countryKey = getSatelliteCountryKey(jsonData);
+  switch (countryKey) {
+    case 'russia':
+      return 0xff2222;
+    case 'china':
+      return 0xffcc00;
+    case 'esa':
+      return 0x3388ff;
+    case 'japan':
+      return 0xffffff;
+    case 'india':
+      return 0xff8800;
+    case 'us':
+      return 0x00ffff;
+    default:
+      return 0xcc55ff;
+  }
 }
 
 function buildSatelliteMeshes() {
-    const satKeys = Object.keys(satelliteDataMap);
+  const satKeys = Object.keys(satelliteDataMap).filter((satId) => {
+    if (currentCountryFilter === 'all') {
+      return true;
+    }
+    const satData = satelliteDataMap[satId];
+    if (!satData) {
+      return false;
+    }
+    return getSatelliteCountryKey(satData) === currentCountryFilter;
+  });
     const numSatellites = satKeys.length;
     
     // 1. CLEANUP: Remove old trails from the scene before clearing the array
@@ -535,6 +574,25 @@ groupSelectorConfig = {
         currentGroup = newGroup; // Keep the global group state updated
         await loadSatellites(newGroup);
     }
+};
+  
+countrySelectorConfig = {
+  initialCountry: 'all',
+  countries: [
+    { value: 'all', label: 'All Countries' },
+    { value: 'us', label: 'US / NASA / Starlink' },
+    { value: 'russia', label: 'Russia / Soviet' },
+    { value: 'china', label: 'China' },
+    { value: 'esa', label: 'ESA / Europe' },
+    { value: 'japan', label: 'Japan' },
+    { value: 'india', label: 'India' },
+    { value: 'other', label: 'Other' },
+  ],
+  onCountryChange: (country) => {
+    currentCountryFilter = country;
+    clearSelectedSatelliteState();
+    buildSatelliteMeshes();
+  }
 };
 
 loadSatellites("active");

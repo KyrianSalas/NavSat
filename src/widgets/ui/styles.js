@@ -30,7 +30,8 @@ export function ensureSidebarStyles() {
       -webkit-backdrop-filter: blur(10px);
       box-shadow: -12px 0 36px rgba(2, 6, 16, 0.35);
       z-index: 101;
-      overflow: hidden;
+      overflow-x: hidden;
+      overflow-y: auto;
       transition: width 0.2s ease, padding 0.2s ease, background 0.2s ease;
     }
 
@@ -82,12 +83,11 @@ export function ensureSidebarStyles() {
     }
 
     .sidebar-content {
-      flex: 1;
-      min-height: 0;
+      flex: 0 0 auto;
       display: flex;
       flex-direction: column;
       gap: 12px;
-      overflow-y: auto;
+      overflow: visible;
       padding-right: 2px;
       transition: opacity 0.14s ease, transform 0.18s ease;
     }
