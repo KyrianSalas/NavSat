@@ -53,6 +53,7 @@ const planetVisuals = setupPlanetVisuals({ scene, camera, renderer });
 
 // Sidebar will be set up after satellites load
 let sidebarManager = null;
+let groupSelectorConfig = null;
 
 function initializeSidebar() {
   if (sidebarManager) {
@@ -81,6 +82,14 @@ function initializeSidebar() {
       }
     },
   });
+  
+  // Now that sidebar is initialized, mount the group selector with the sidebar content
+  if (groupSelectorConfig && sidebarManager && sidebarManager.sidebarContent) {
+    setupGroupSelector({
+      ...groupSelectorConfig,
+      mountTarget: sidebarManager.sidebarContent,
+    });
+  }
   
   return sidebarManager;
 }
@@ -349,15 +358,15 @@ async function loadSatellites(group = "active") {
 }
 
 // Initialize the group selector widget and the initial load
-setupGroupSelector({
+// Store group selector config to be mounted after sidebar initializes
+groupSelectorConfig = {
     initialGroup: 'active',
-    mountTarget: null, // Will be set after sidebar initializes
     onGroupChange: async (newGroup) => {
         console.log(`Switching to group: ${newGroup}...`);
         clearSatellites();
         await loadSatellites(newGroup);
     }
-});
+};
 
 loadSatellites("active");
 
