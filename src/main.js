@@ -5,7 +5,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { Line2 } from 'three/addons/lines/Line2.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
-import { setupPlanetVisuals } from './planetVisuals.js';
+import { setupPlanetVisuals } from './widgets/planetVisuals.js';
 import { addUserLocationMarker } from './widgets/userLocationMarker.js';
 import * as service from './api/satelliteService.js'
 
