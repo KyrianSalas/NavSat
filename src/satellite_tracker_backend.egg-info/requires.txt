@@ -1,0 +1,9 @@
+fastapi
+pydantic
+pydantic-settings
+celest
+uvicorn
+python-dotenv
+
+[dev]
+pytest

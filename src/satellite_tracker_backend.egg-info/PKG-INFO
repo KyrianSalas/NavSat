@@ -1,0 +1,18 @@
+Metadata-Version: 2.4
+Name: satellite-tracker-backend
+Version: 0.1.0
+Summary: FastAPI backend for satellite tracking using Celest
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: fastapi
+Requires-Dist: pydantic
+Requires-Dist: pydantic-settings
+Requires-Dist: celest
+Requires-Dist: uvicorn
+Requires-Dist: python-dotenv
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
+
+# BrisHack-Project-z2026-
+Project made for BrisHack
+test test
