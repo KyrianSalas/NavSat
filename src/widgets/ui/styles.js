@@ -16,10 +16,10 @@ export function ensureSidebarStyles() {
       --card-bg: linear-gradient(160deg, rgba(15, 25, 46, 0.88), rgba(10, 19, 35, 0.6));
       --card-border: rgba(162, 197, 255, 0.22);
       position: fixed;
-      top: 0;
+      top: 65px;
       right: 0;
       width: 320px;
-      height: 100vh;
+      height: calc(100vh - 65px);
       box-sizing: border-box;
       display: flex;
       flex-direction: column;
@@ -55,7 +55,7 @@ export function ensureSidebarStyles() {
 
     #${SIDEBAR_ID}.is-collapsed .sidebar-topbar {
       position: fixed;
-      top: 3.5%;
+      top: 32.5px;
       right: 8px;
       transform: translateY(-50%);
       justify-content: center;
@@ -380,7 +380,7 @@ export function ensureTopBarStyles() {
       top: 0;
       left: 0;
       right: 0;
-      height: 50px;
+      height: 65px;
       background: rgba(2, 12, 30, 0.3);
       border-bottom: none;
       display: flex;
@@ -397,14 +397,14 @@ export function ensureTopBarStyles() {
       bottom: 0;
       left: 0;
       width: 25%;
-      height: 3px;
+      height: 4px;
       background: linear-gradient(to right, rgba(24, 245, 255, 0.4), rgba(24, 245, 255, 0));
       pointer-events: none;
     }
 
     #topBar h1 {
       margin: 0;
-      font-size: 22px;
+      font-size: 33px;
       color: #18f5ff;
       font-weight: 700;
       font-family: Electrolize, 'Segoe UI', sans-serif;
@@ -415,15 +415,13 @@ export function ensureTopBarStyles() {
     }
 
     .header-logo {
-      height: 30px;
-      width: 30px;
+      height: 45px;
+      width: 45px;
     }
 
 canvas {
   display: block;
-  position: absolute;
-  top: 0;
-  left: 0;
+  margin-top: 65px;
 }
   `;
 
