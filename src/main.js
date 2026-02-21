@@ -178,6 +178,8 @@ function measureCalloutTitleWidth(text) {
 const dummy = new THREE.Object3D();
 let satInstancedMesh;
 const RENDER_TRAILS_THRESHOLD = 500;
+const SATELLITE_UPDATE_INTERVAL_MS = 120;
+const EARTH_RADIUS_KM = 6371;
 
 const sharedSatGeometry = new THREE.SphereGeometry(0.005, 8, 8);
 const sharedSatMaterial = new THREE.MeshBasicMaterial({color: 0xffffff});
@@ -189,11 +191,16 @@ const activeSatellites = [];
 // Creating the visual marker (the red dot)
 const TRAIL_LENGTH_MINUTES = 3; // How long you want the tail to be
 const TRAIL_POINTS = 5; // Smoothness of the tail
+const TRAIL_STEP_MS = (TRAIL_LENGTH_MINUTES * 60000) / TRAIL_POINTS;
 
 const initialPositions = [];
 for (let i = 0; i < TRAIL_POINTS; i++) {
     initialPositions.push(0, 0, 0);
 }
+
+let lastSatelliteUpdateMs = 0;
+let satelliteLoadToken = 0;
+let satelliteLoadController = null;
 
 const sharedTrailMaterial = new LineMaterial({
     color: 0xffffff, // Use white so vertex colors show through correctly
@@ -208,7 +215,7 @@ const sharedTrailMaterial = new LineMaterial({
 
 sharedTrailMaterial.resolution.set(window.innerWidth, window.innerHeight);
 
-function getSatelliteColor(jsonData) {
+function getSatelliteColorHex(jsonData) {
     const name = jsonData.OBJECT_NAME.toUpperCase();
 
     // 1. Soviet / Russian (Red)
@@ -216,7 +223,7 @@ function getSatelliteColor(jsonData) {
     if (name.includes('COSMOS') || name.startsWith('SL-') ||
         name.includes('INTERCOSMOS') || name.includes('RESURS') ||
         name.includes('OKEAN') || name.includes('ZARYA')) {
-        return new THREE.Color(0xff2222);
+        return 0xff2222;
     }
 
         // 2. Chinese (Gold / Yellow)
@@ -224,13 +231,13 @@ function getSatelliteColor(jsonData) {
     else if (name.startsWith('CZ-') || name.includes('SHIJIAN') ||
         name.includes('YAOGAN') || name.includes('HXMT') ||
         name.includes('CSS') || name.startsWith('SZ-')) {
-        return new THREE.Color(0xffcc00);
+        return 0xffcc00;
     }
 
         // 3. European Space Agency / Arianespace (Blue)
     // ARIANE, ENVISAT, HELIOS
     else if (name.includes('ARIANE') || name.includes('ENVISAT') || name.includes('HELIOS')) {
-        return new THREE.Color(0x3388ff);
+        return 0x3388ff;
     }
 
         // 4. Japanese (White)
@@ -238,7 +245,7 @@ function getSatelliteColor(jsonData) {
     else if (name.includes('H-2A') || name.includes('ALOS') ||
         name.includes('ASTRO') || name.includes('AJISAI') ||
         name.includes('MIDORI') || name.includes('XRISM')) {
-        return new THREE.Color(0xffffff);
+        return 0xffffff;
     }
 
         // 5. United States / NASA / Commercial US (Cyan/Light Blue)
@@ -248,22 +255,24 @@ function getSatelliteColor(jsonData) {
         name.startsWith('USA ') || name.includes('OAO') ||
         name.includes('SERT') || name.includes('SEASAT') ||
         name.includes('AQUA') || name.includes('HST') || name.includes('ACS3') || name.includes('STARLINK')) {
-        return new THREE.Color(0x00ffff);
+        return 0x00ffff;
     }
 
         // 6. Indian (Orange)
     // GSLV
     else if (name.includes('GSLV')) {
-        return new THREE.Color(0xff8800);
+        return 0xff8800;
     }
 
     // Default Fallback for anything else (e.g., SAOCOM, ISIS, etc.) (Grey/Purple)
-    return new THREE.Color(0xcc55ff);
+    return 0xcc55ff;
 }
 
 function buildSatelliteMeshes() {
     const satKeys = Object.keys(satelliteDataMap);
     const numSatellites = satKeys.length;
+    const now = new Date();
+    const gmstNow = satellite.gstime(now);
 
     // 1. Create the InstancedMesh (Geometry, Material, Count)
     satInstancedMesh = new THREE.InstancedMesh(sharedSatGeometry, sharedSatMaterial, numSatellites);
@@ -274,11 +283,13 @@ function buildSatelliteMeshes() {
     scene.add(satInstancedMesh);
 
     const renderTrails = numSatellites < RENDER_TRAILS_THRESHOLD;
+    const satColor = new THREE.Color();
 
-    satKeys.forEach((satId, index) => {
+    for (let index = 0; index < satKeys.length; index += 1) {
+        const satId = satKeys[index];
         const jsonData = satelliteDataMap[satId];
         const satrec = satellite.json2satrec(jsonData);
-        const satColor = getSatelliteColor(jsonData);
+        satColor.setHex(getSatelliteColorHex(jsonData));
 
         // 2. Set the geopolitical color for this specific instance
         satInstancedMesh.setColorAt(index, satColor);
@@ -304,20 +315,53 @@ function buildSatelliteMeshes() {
             scene.add(trailLine);
         }
 
+        const posAndVel = satellite.propagate(satrec, now);
+        let altitudeKm = 0;
+        let speedKms = 0;
+        let angleDeg = 0;
+        if (posAndVel.position && !Number.isNaN(posAndVel.position.x)) {
+            const posGd = satellite.eciToGeodetic(posAndVel.position, gmstNow);
+            const r = 1 + (posGd.height / EARTH_RADIUS_KM);
+            const x = r * Math.cos(posGd.latitude) * Math.cos(posGd.longitude);
+            const y = r * Math.sin(posGd.latitude);
+            const z = r * Math.cos(posGd.latitude) * Math.sin(-posGd.longitude);
+
+            if (Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z)) {
+                dummy.position.set(x, y, z);
+                dummy.updateMatrix();
+                satInstancedMesh.setMatrixAt(index, dummy.matrix);
+            }
+
+            altitudeKm = posGd.height;
+            if (posAndVel.velocity && !Number.isNaN(posAndVel.velocity.x)) {
+                speedKms = Math.sqrt(
+                    (posAndVel.velocity.x ** 2) +
+                    (posAndVel.velocity.y ** 2) +
+                    (posAndVel.velocity.z ** 2)
+                );
+            }
+            angleDeg = (THREE.MathUtils.radToDeg(Math.atan2(z, x)) + 360) % 360;
+        }
+
         activeSatellites.push({
             id: satId,
             satrec: satrec,
             index: index, // Store its index in the InstancedMesh
             trailGeometry: trailGeo,
             trailLine: trailLine, // Store the line so we can delete it later
-            altitudeKm: 0,
-            speedKms: 0,
-            angleDeg: 0
+            trailPositions: trailGeo ? new Float32Array(TRAIL_POINTS * 3) : null,
+            altitudeKm,
+            speedKms,
+            angleDeg
         });
-    });
+    }
 
     // Tell Three.js we updated the colors
-    satInstancedMesh.instanceColor.needsUpdate = true;
+    if (satInstancedMesh.instanceColor) {
+        satInstancedMesh.instanceColor.needsUpdate = true;
+    }
+    satInstancedMesh.instanceMatrix.needsUpdate = true;
+    lastSatelliteUpdateMs = performance.now();
 }
 
 // --- NEW CLEAR LOGIC ---
@@ -330,12 +374,13 @@ function clearSatellites() {
         satInstancedMesh = null;
     }
 
-    activeSatellites.forEach(sat => {
+    for (let i = 0; i < activeSatellites.length; i += 1) {
+        const sat = activeSatellites[i];
         if (sat.trailLine) {
             scene.remove(sat.trailLine);
             sat.trailGeometry.dispose();
         }
-    });
+    }
 
     // Wipe the arrays for the new fetch
     for (const prop of Object.getOwnPropertyNames(satelliteDataMap)) {
@@ -345,12 +390,24 @@ function clearSatellites() {
 }
 
 async function loadSatellites(group = "active") {
-    try {
-        const jsonArray = await service.getAllSatellites(group);
+    const loadToken = ++satelliteLoadToken;
+    if (satelliteLoadController) {
+        satelliteLoadController.abort();
+    }
+    satelliteLoadController = new AbortController();
 
-        jsonArray.forEach(satelliteObj => {
-            satelliteDataMap[satelliteObj.OBJECT_ID] = satelliteObj;
+    try {
+        const jsonArray = await service.getAllSatellites(group, {
+            signal: satelliteLoadController.signal,
         });
+        if (loadToken !== satelliteLoadToken) {
+            return;
+        }
+
+        for (let i = 0; i < jsonArray.length; i += 1) {
+            const satelliteObj = jsonArray[i];
+            satelliteDataMap[satelliteObj.OBJECT_ID] = satelliteObj;
+        }
 
         console.log(`Successfully loaded ${jsonArray.length} satellites for group: ${group}.`);
         buildSatelliteMeshes();
@@ -358,7 +415,14 @@ async function loadSatellites(group = "active") {
         initializeSidebar();
 
     } catch (error) {
+        if (error?.name === 'AbortError') {
+            return;
+        }
         console.error("Failed to load satellites.", error);
+    } finally {
+        if (loadToken === satelliteLoadToken) {
+            satelliteLoadController = null;
+        }
     }
 }
 
@@ -378,18 +442,26 @@ loadSatellites("active");
 
 // --- 2. THE UPDATE FUNCTION ---
 function updateSatellites() {
+    const nowMs = performance.now();
+    if ((nowMs - lastSatelliteUpdateMs) < SATELLITE_UPDATE_INTERVAL_MS) {
+        return;
+    }
+    lastSatelliteUpdateMs = nowMs;
+
     const now = new Date();
+    const nowEpochMs = now.getTime();
+    const gmstNow = satellite.gstime(now);
 
     // Loop through every active satellite
-    activeSatellites.forEach(sat => {
+    for (let satIndex = 0; satIndex < activeSatellites.length; satIndex += 1) {
+        const sat = activeSatellites[satIndex];
         // A. Update the Main Satellite Dot
         const posAndVel = satellite.propagate(sat.satrec, now);
 
         // Include the NaN guards here!
-        if (posAndVel.position && !isNaN(posAndVel.position.x)) {
-            const gmst = satellite.gstime(now);
-            const posGd = satellite.eciToGeodetic(posAndVel.position, gmst);
-            const r = 1 + (posGd.height / 6371);
+        if (posAndVel.position && !Number.isNaN(posAndVel.position.x)) {
+            const posGd = satellite.eciToGeodetic(posAndVel.position, gmstNow);
+            const r = 1 + (posGd.height / EARTH_RADIUS_KM);
 
             const x = r * Math.cos(posGd.latitude) * Math.cos(posGd.longitude);
             const y = r * Math.sin(posGd.latitude);
@@ -403,7 +475,7 @@ function updateSatellites() {
             }
 
             sat.altitudeKm = posGd.height;
-            if (posAndVel.velocity && !isNaN(posAndVel.velocity.x)) {
+            if (posAndVel.velocity && !Number.isNaN(posAndVel.velocity.x)) {
                 sat.speedKms = Math.sqrt(
                     (posAndVel.velocity.x ** 2) +
                     (posAndVel.velocity.y ** 2) +
@@ -414,34 +486,41 @@ function updateSatellites() {
 
             // Only do the heavy trail math if the trail geometry actually exists
             if (sat.trailGeometry) {
-                const flatPositionsArray = [];
+                const trailPositions = sat.trailPositions;
                 for (let i = 0; i < TRAIL_POINTS; i++) {
-                    const timeOffsetMs = (TRAIL_POINTS - 1 - i) * (TRAIL_LENGTH_MINUTES * 60000 / TRAIL_POINTS);
-                    const historicalTime = new Date(now.getTime() - timeOffsetMs);
+                    const positionOffset = i * 3;
+                    const timeOffsetMs = (TRAIL_POINTS - 1 - i) * TRAIL_STEP_MS;
+                    const historicalTime = new Date(nowEpochMs - timeOffsetMs);
                     const pastPosVel = satellite.propagate(sat.satrec, historicalTime);
 
-                    if (pastPosVel.position && !isNaN(pastPosVel.position.x)) {
+                    if (pastPosVel.position && !Number.isNaN(pastPosVel.position.x)) {
                         const pastGmst = satellite.gstime(historicalTime);
                         const pastGd = satellite.eciToGeodetic(pastPosVel.position, pastGmst);
-                        const pastR = 1 + (pastGd.height / 6371);
+                        const pastR = 1 + (pastGd.height / EARTH_RADIUS_KM);
 
                         const px = pastR * Math.cos(pastGd.latitude) * Math.cos(pastGd.longitude);
                         const py = pastR * Math.sin(pastGd.latitude);
                         const pz = pastR * Math.cos(pastGd.latitude) * Math.sin(-pastGd.longitude);
 
-                        if (isNaN(px) || isNaN(py) || isNaN(pz)) {
-                            flatPositionsArray.push(0, 0, 0);
+                        if (!Number.isFinite(px) || !Number.isFinite(py) || !Number.isFinite(pz)) {
+                            trailPositions[positionOffset] = 0;
+                            trailPositions[positionOffset + 1] = 0;
+                            trailPositions[positionOffset + 2] = 0;
                         } else {
-                            flatPositionsArray.push(px, py, pz);
+                            trailPositions[positionOffset] = px;
+                            trailPositions[positionOffset + 1] = py;
+                            trailPositions[positionOffset + 2] = pz;
                         }
                     } else {
-                        flatPositionsArray.push(0, 0, 0);
+                        trailPositions[positionOffset] = 0;
+                        trailPositions[positionOffset + 1] = 0;
+                        trailPositions[positionOffset + 2] = 0;
                     }
                 }
-                sat.trailGeometry.setPositions(flatPositionsArray);
+                sat.trailGeometry.setPositions(trailPositions);
             }
         }
-    });
+    }
 
     // CRITICAL: Tell the GPU the matrices have moved!
     if (satInstancedMesh) {
@@ -884,7 +963,7 @@ function onCanvasClick(event) {
       const intersects = raycaster.intersectObject(satInstancedMesh);
       if (intersects.length > 0 && !selectedSatellite && !selectedStorm) {
         const instanceId = intersects[0].instanceId;
-        const clickedSat = activeSatellites.find(sat => sat.index === instanceId);
+        const clickedSat = activeSatellites[instanceId];
         if (clickedSat) {
           selectSatellite(clickedSat);
         }
