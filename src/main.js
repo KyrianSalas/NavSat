@@ -1,10 +1,12 @@
 import * as THREE from 'three';
 import * as satellite from "satellite.js"
+import { getUserLocation } from './services/locationService.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { Line2 } from 'three/addons/lines/Line2.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import { setupPlanetVisuals } from './planetVisuals.js';
+import { addUserLocationMarker } from './widgets/userLocationMarker.js';
 import * as service from './api/satelliteService.js'
 
 
@@ -34,11 +36,17 @@ controls.dampingFactor = 0.05;
 controls.minDistance = 1.5;
 controls.maxDistance = 10;
 
+addUserLocationMarker(scene);
+
 // --- Raycaster for click detection ---
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 let selectedSatellite = null;
 let isAnimatingCamera = false;
+
+// --- User location --- epic formatted comment
+const location = await getUserLocation();
+console.log('location:', location);
 const projectedSatelliteScreen = new THREE.Vector3();
 
 const infoBox = document.getElementById('infoBox');

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from typing import List, Optional
 from services.satellite_service import get_satellites_by_group, get_satellite_by_id
 from models.satellite import SatelliteData
@@ -79,10 +79,12 @@ async def cache_satellites(group: str = Query(..., description="CelesTrak group 
     except Exception as e:
         return {"status": "error", "details": str(e)}
 
+
 # Default group is visual (top 100)
 @router.get("/satellites", response_model=List[SatelliteData])
 def list_satellites(group: Optional[str] = Query("visual", description="CelesTrak group (visual, active, stations, weather, etc.)")):
     return get_satellites_by_group(group)
+
 
 # Gets a single satellite based by on id
 @router.get("/satellites/{satellite_norad_id}", response_model=SatelliteData)

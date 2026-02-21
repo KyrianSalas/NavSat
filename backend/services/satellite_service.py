@@ -1,4 +1,5 @@
 import requests
+import socket
 from fastapi import HTTPException
 
 def get_satellites_by_group(group="visual"):
@@ -24,10 +25,6 @@ def get_satellites_by_group(group="visual"):
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"CelesTrak API error: {str(e)}")
 
-def get_top100_satellites():
-    """Legacy function - calls get_satellites_by_group with 'visual' group"""
-    return get_satellites_by_group("visual")
-
 def get_satellite_by_id(norad_id):
     # Defines URL as JSON, single satellite id
     url = f"https://celestrak.org/NORAD/elements/gp.php?CATNR={norad_id}&FORMAT=JSON-PRETTY"
@@ -49,3 +46,4 @@ def get_satellite_by_id(norad_id):
         return orbital_list[0]
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Collecting sat by id API error: {str(e)}")
+    
