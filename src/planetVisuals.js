@@ -285,11 +285,45 @@ export function setupPlanetVisuals({ scene, camera, renderer }) {
   for (let i = 0; i < starCount * 3; i++) {
     starPositions[i] = (Math.random() - 0.5) * 200;
   }
+
+  // Use a soft circular sprite so stars render as glows, not square pixels.
+  const starSpriteCanvas = document.createElement('canvas');
+  starSpriteCanvas.width = 64;
+  starSpriteCanvas.height = 64;
+  const starSpriteContext = starSpriteCanvas.getContext('2d');
+
+  if (starSpriteContext) {
+    const center = starSpriteCanvas.width / 2;
+    const gradient = starSpriteContext.createRadialGradient(center, center, 0, center, center, center);
+    gradient.addColorStop(0.0, 'rgba(255, 255, 255, 1.0)');
+    gradient.addColorStop(0.2, 'rgba(255, 255, 255, 1.0)');
+    gradient.addColorStop(0.45, 'rgba(255, 255, 255, 0.45)');
+    gradient.addColorStop(1.0, 'rgba(255, 255, 255, 0.0)');
+
+    starSpriteContext.fillStyle = gradient;
+    starSpriteContext.fillRect(0, 0, starSpriteCanvas.width, starSpriteCanvas.height);
+  }
+
+  const starSpriteTexture = new THREE.CanvasTexture(starSpriteCanvas);
+  starSpriteTexture.colorSpace = THREE.SRGBColorSpace;
+  starSpriteTexture.generateMipmaps = true;
+  starSpriteTexture.minFilter = THREE.LinearMipMapLinearFilter;
+  starSpriteTexture.magFilter = THREE.LinearFilter;
+
   const starGeometry = new THREE.BufferGeometry();
   starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
   const stars = new THREE.Points(
     starGeometry,
-    new THREE.PointsMaterial({ color: 0xffffff, size: 0.15 })
+    new THREE.PointsMaterial({
+      color: 0xffffff,
+      size: 0.17,
+      map: starSpriteTexture,
+      alphaMap: starSpriteTexture,
+      transparent: true,
+      alphaTest: 0.02,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    })
   );
   scene.add(stars);
 
