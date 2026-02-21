@@ -121,8 +121,17 @@ globe.material.onBeforeCompile = (shader) => {
     `#include <emissivemap_fragment>
     #if NUM_DIR_LIGHTS > 0
       float sunNdotL = dot(normal, directionalLights[0].direction);
-      float nightMask = 1.0 - smoothstep(-0.15, 0.08, sunNdotL);
-      totalEmissiveRadiance *= pow(nightMask, 1.5);
+
+      // Wider and softer city-light transition through civil/nautical twilight.
+      float nightMask = 1.0 - smoothstep(-0.30, 0.18, sunNdotL);
+      totalEmissiveRadiance *= nightMask;
+
+      // Broad, low-intensity sunset haze around the terminator (avoids a hard red stripe).
+      float sunsetBand =
+        smoothstep(-0.32, -0.02, sunNdotL) *
+        (1.0 - smoothstep(0.03, 0.24, sunNdotL));
+      vec3 sunsetColor = vec3(0.55, 0.32, 0.18);
+      totalEmissiveRadiance += sunsetColor * sunsetBand * 0.028;
     #endif`
   );
 };
@@ -146,6 +155,22 @@ const cloudLayer = new THREE.Mesh(
     emissiveIntensity: 0.035,
   })
 );
+cloudLayer.material.onBeforeCompile = (shader) => {
+  shader.fragmentShader = shader.fragmentShader.replace(
+    '#include <emissivemap_fragment>',
+    `#include <emissivemap_fragment>
+    #if NUM_DIR_LIGHTS > 0
+      float sunNdotL = dot(normal, directionalLights[0].direction);
+
+      // Clouds carry warm scattering slightly deeper into the night side.
+      float cloudSunsetBand =
+        smoothstep(-0.40, -0.06, sunNdotL) *
+        (1.0 - smoothstep(0.06, 0.30, sunNdotL));
+      vec3 cloudSunsetColor = vec3(0.72, 0.44, 0.28);
+      totalEmissiveRadiance += cloudSunsetColor * cloudSunsetBand * 0.06;
+    #endif`
+  );
+};
 scene.add(cloudLayer);
 
 // --- Starfield ---
