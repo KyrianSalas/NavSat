@@ -10,26 +10,6 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 
-const issJson = {
-    "OBJECT_NAME": "ATLAS CENTAUR 2",
-    "OBJECT_ID": "1963-047A",
-    "EPOCH": "2026-02-21T01:44:49.601184",
-    "MEAN_MOTION": 14.12016381,
-    "ECCENTRICITY": 0.05481215,
-    "INCLINATION": 30.357,
-    "RA_OF_ASC_NODE": 288.5064,
-    "ARG_OF_PERICENTER": 293.848,
-    "MEAN_ANOMALY": 60.5614,
-    "EPHEMERIS_TYPE": 0,
-    "CLASSIFICATION_TYPE": "U",
-    "NORAD_CAT_ID": 694,
-    "ELEMENT_SET_NO": 999,
-    "REV_AT_EPOCH": 12927,
-    "BSTAR": 0.00012889653,
-    "MEAN_MOTION_DOT": 0.00001171,
-    "MEAN_MOTION_DDOT": 0
-};
-
 // --- Renderer ---
 
 const canvas = document.getElementById('canvas');
@@ -398,39 +378,22 @@ const rimLight = new THREE.DirectionalLight(0x9fc9ff, 0.08);
 rimLight.position.set(-4, -2, -3);
 scene.add(rimLight);
 
-// Converting JSON to a Satellite Record
-const satrec = satellite.json2satrec(issJson);
+// --------------- SATELLITES ---------------
+
+// The dictionary
+const satelliteDataMap = {};
+const activeSatellites = [];
 
 // Creating the visual marker (the red dot)
-const TRAIL_LENGTH_MINUTES = 25; // How long you want the tail to be
-const TRAIL_POINTS = 150; // Smoothness of the tail
-const TRAIL_UPDATE_INTERVAL_MS = 120; // Recompute trajectory ~8 times/sec instead of every frame.
-const trailGeometry = new LineGeometry();
-const trailPositions = new Float32Array(TRAIL_POINTS * 3);
-const historicalTime = new Date();
-let lastTrailUpdateMs = 0;
+const TRAIL_LENGTH_MINUTES = 5; // How long you want the tail to be
+const TRAIL_POINTS = 20; // Smoothness of the tail
 
 const initialPositions = [];
 for (let i = 0; i < TRAIL_POINTS; i++) {
     initialPositions.push(0, 0, 0);
 }
-trailGeometry.setPositions(initialPositions);
 
-const trailColors = [];
-const colorHelper = new THREE.Color();
-
-// Pre-calculate gradient colors (Tail -> Head)
-for (let i = 0; i < TRAIL_POINTS; i++) {
-    // t goes from 0.0 (tail) to 1.0 (head)
-    const t = i / (TRAIL_POINTS - 1);
-    // Interpolate from Black (0,0,0) to Bright Red (1,0,2)
-    // Using a slight orange/yellow tint at the bright end makes it look hotter
-    colorHelper.setRGB(t, t * 0.2, 0);
-    trailColors.push(colorHelper.r, colorHelper.g, colorHelper.b);
-}
-trailGeometry.setColors(trailColors);
-
-const trailMaterial = new LineMaterial({
+const sharedTrailMaterial = new LineMaterial({
     color: 0xffffff, // Use white so vertex colors show through correctly
     linewidth: 4,    // CHANGE THIS NUMBER TO MAKE IT WIDER/THINNER
     vertexColors: true, // Necessary for gradient
@@ -438,63 +401,139 @@ const trailMaterial = new LineMaterial({
     alphaToCoverage: true, // Helps edges look smoother
 });
 
-trailMaterial.resolution.set(window.innerWidth, window.innerHeight);
+sharedTrailMaterial.resolution.set(window.innerWidth, window.innerHeight);
 
-const trailLine = new Line2(trailGeometry, trailMaterial);
-scene.add(trailLine);
+const sharedSatGeometry = new THREE.SphereGeometry(0.015,16,16)
 
-const issMesh = new THREE.Mesh(
-    new THREE.SphereGeometry(0.015, 16, 16),
-    new THREE.MeshBasicMaterial({ color: 0xff2200 })
-);
-scene.add(issMesh);
+function getSatelliteColor(jsonData) {
+    const revsPerDay = jsonData.MEAN_MOTION;
+
+    // Keep GEO and MEO just in case you add other data types later!
+    if (revsPerDay > 0.9 && revsPerDay < 1.1) return new THREE.Color(0x00ff00); // GEO (Green)
+    if (revsPerDay > 1.9 && revsPerDay < 2.2) return new THREE.Color(0x00aaff); // MEO (Blue)
+
+    // Detailed LEO Breakdown for your specific dataset
+    if (revsPerDay >= 11 && revsPerDay < 13) {
+        return new THREE.Color(0xcc00ff); // Purple (~11-12 revs/day - Higher LEO)
+    }
+    else if (revsPerDay >= 13 && revsPerDay < 14) {
+        return new THREE.Color(0x00ffff); // Cyan (~13 revs/day)
+    }
+    else if (revsPerDay >= 14 && revsPerDay < 15) {
+        return new THREE.Color(0xffff00); // Yellow (~14 revs/day - Very common)
+    }
+    else if (revsPerDay >= 15 && revsPerDay < 16) {
+        return new THREE.Color(0xff6600); // Orange (~15 revs/day - Very common, lower altitude)
+    }
+    else if (revsPerDay >= 16) {
+        return new THREE.Color(0xff0000); // Red (16+ revs/day - Extremely fast, very low altitude)
+    }
+
+    return new THREE.Color(0xffffff); // Catch-all Fallback (White)
+}
+
+function buildSatelliteMeshes() {
+    Object.keys(satelliteDataMap).forEach(satId => {
+        const jsonData = satelliteDataMap[satId];
+        const satrec = satellite.json2satrec(jsonData);
+        const satColor = getSatelliteColor(jsonData);
+
+        const trailColors = [];
+        const colorHelper = new THREE.Color();
+        for (let i = 0; i < TRAIL_POINTS; i++) {
+            const t = i / (TRAIL_POINTS - 1);
+            colorHelper.setRGB(satColor.r * t, satColor.g * t, satColor.b * t);
+            trailColors.push(colorHelper.r, colorHelper.g, colorHelper.b);
+        }
+
+        const trailGeo = new LineGeometry();
+        trailGeo.setPositions(initialPositions);
+        trailGeo.setColors(trailColors); // Or your custom colors from the previous step!
+
+        const trailLine = new Line2(trailGeo, sharedTrailMaterial);
+        scene.add(trailLine);
+
+        const uniqueSatMaterial = new THREE.MeshBasicMaterial({color: satColor});
+        const satMesh = new THREE.Mesh(sharedSatGeometry, uniqueSatMaterial);
+        scene.add(satMesh);
+
+        activeSatellites.push({
+            id: satId,
+            satrec: satrec,
+            mesh: satMesh,
+            trailGeometry: trailGeo
+        });
+    });
+}
+
+async function loadSatellites() {
+    try {
+        const response = await fetch('https://bris-hack-project-2026.vercel.app/satellites');
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+        const jsonArray = await response.json();
+
+        jsonArray.forEach(satelliteObj => {
+            satelliteDataMap[satelliteObj.OBJECT_ID] = satelliteObj;
+        });
+
+        console.log(`Successfully loaded ${jsonArray.length} satellites.`);
+        buildSatelliteMeshes();
+
+    } catch (error) {
+        console.error("Failed to load satellites. Check if your Python server is running and CORS is enabled.", error);
+    }
+}
+
+loadSatellites();
+
 
 // --- 2. THE UPDATE FUNCTION ---
-function updateISS() {
+function updateSatellites() {
     const now = new Date();
-    const nowMs = now.getTime();
 
-    // A. Update the Main Satellite Dot
-    const posAndVel = satellite.propagate(satrec, now);
-    if (posAndVel.position) {
-        const gmst = satellite.gstime(now);
-        const posGd = satellite.eciToGeodetic(posAndVel.position, gmst);
-        const r = 1 + (posGd.height / 6371);
-        issMesh.position.set(
-            r * Math.cos(posGd.latitude) * Math.cos(posGd.longitude),
-            r * Math.sin(posGd.latitude),
-            r * Math.cos(posGd.latitude) * Math.sin(-posGd.longitude)
-        );
-    }
+    // Loop through every active satellite
+    activeSatellites.forEach(sat => {
+        const flatPositionsArray = [];
 
-    // B. Dynamically generate the trailing line (Past trajectory)
-    if (nowMs - lastTrailUpdateMs < TRAIL_UPDATE_INTERVAL_MS) {
-        return;
-    }
-    lastTrailUpdateMs = nowMs;
-
-    for (let i = 0; i < TRAIL_POINTS; i++) {
-        // Calculate the historical time for this specific point in the line
-        // i=0 is the oldest point (tail end), i=99 is the current position (head)
-        const timeOffsetMs = (TRAIL_POINTS - 1 - i) * (TRAIL_LENGTH_MINUTES * 60000 / TRAIL_POINTS);
-        historicalTime.setTime(nowMs - timeOffsetMs);
-
-        const pastPosVel = satellite.propagate(satrec, historicalTime);
-        const baseIndex = i * 3;
-
-        if (pastPosVel.position) {
-            const pastGmst = satellite.gstime(historicalTime);
-            const pastGd = satellite.eciToGeodetic(pastPosVel.position, pastGmst);
-            const pastR = 1 + (pastGd.height / 6371);
-
-            trailPositions[baseIndex] = pastR * Math.cos(pastGd.latitude) * Math.cos(pastGd.longitude);
-            trailPositions[baseIndex + 1] = pastR * Math.sin(pastGd.latitude);
-            trailPositions[baseIndex + 2] = pastR * Math.cos(pastGd.latitude) * Math.sin(-pastGd.longitude);
+        // A. Update the Main Satellite Dot
+        const posAndVel = satellite.propagate(sat.satrec, now);
+        if (posAndVel.position) {
+            const gmst = satellite.gstime(now);
+            const posGd = satellite.eciToGeodetic(posAndVel.position, gmst);
+            const r = 1 + (posGd.height / 6371);
+            sat.mesh.position.set(
+                r * Math.cos(posGd.latitude) * Math.cos(posGd.longitude),
+                r * Math.sin(posGd.latitude),
+                r * Math.cos(posGd.latitude) * Math.sin(-posGd.longitude)
+            );
         }
-    }
 
-    // Tell Three.js the trail has been updated
-    trailGeometry.setPositions(trailPositions);
+        // B. Dynamically generate the trailing line
+        for (let i = 0; i < TRAIL_POINTS; i++) {
+            const timeOffsetMs = (TRAIL_POINTS - 1 - i) * (TRAIL_LENGTH_MINUTES * 60000 / TRAIL_POINTS);
+            const historicalTime = new Date(now.getTime() - timeOffsetMs);
+            const pastPosVel = satellite.propagate(sat.satrec, historicalTime);
+
+            if (pastPosVel.position) {
+                const pastGmst = satellite.gstime(historicalTime);
+                const pastGd = satellite.eciToGeodetic(pastPosVel.position, pastGmst);
+                const pastR = 1 + (pastGd.height / 6371);
+
+                flatPositionsArray.push(
+                    pastR * Math.cos(pastGd.latitude) * Math.cos(pastGd.longitude),
+                    pastR * Math.sin(pastGd.latitude),
+                    pastR * Math.cos(pastGd.latitude) * Math.sin(-pastGd.longitude)
+                );
+            } else {
+                // Fallback: If SGP4 math fails for an old point, push 0,0,0 to prevent Line2 crashes
+                flatPositionsArray.push(0, 0, 0);
+            }
+        }
+
+        // Apply new positions to this specific satellite's trail
+        sat.trailGeometry.setPositions(flatPositionsArray);
+    });
 }
 
 // --- Click handling for satellite selection ---
@@ -621,13 +660,13 @@ window.addEventListener('resize', () => {
       window.innerHeight * activePostFxMode.bloomResolutionScale
     );
   }
-  trailMaterial.resolution.set(window.innerWidth, window.innerHeight);
+  sharedTrailMaterial.resolution.set(window.innerWidth, window.innerHeight);
 });
 
 // --- Animation Loop ---
 
 renderer.setAnimationLoop(() => {
-    updateISS();
+    updateSatellites();
     cloudLayer.rotation.y += 0.00008;
     updateAtmosphereSunDirection();
     controls.update();
