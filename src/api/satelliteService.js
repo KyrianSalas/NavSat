@@ -7,8 +7,9 @@ let fallback = false;
 const satelliteGroupCache = new Map();
 const inflightSatelliteRequests = new Map();
 
-function buildSatellitesUrl(baseUrl, group) {
-  const params = new URLSearchParams({ group });
+// 1. Add limit to the URL builder
+function buildSatellitesUrl(baseUrl, group, limit) {
+  const params = new URLSearchParams({ group, limit });
   return `${baseUrl}/satellites?${params.toString()}`;
 }
 
@@ -70,13 +71,15 @@ async function fetchJson(url, { signal, timeoutMs } = {}) {
   }
 }
 
-async function fetchSatellitesWithFallback(group, signal) {
-  const remoteUrl = buildSatellitesUrl(REMOTE_API_BASE, group);
+// 2. Pass limit through the fallback handler
+async function fetchSatellitesWithFallback(group, limit, signal) {
+  const remoteUrl = buildSatellitesUrl(REMOTE_API_BASE, group, limit);
+  console.log(remoteUrl);
   if (fallback) {
     return fetchJson(remoteUrl, { signal });
   }
 
-  const localUrl = buildSatellitesUrl(LOCAL_API_BASE, group);
+  const localUrl = buildSatellitesUrl(LOCAL_API_BASE, group, limit);
   try {
     return await fetchJson(localUrl, {
       signal,
@@ -95,11 +98,14 @@ async function fetchSatellitesWithFallback(group, signal) {
 /**
  * Fetch satellites by CelesTrak group
  * @param {string} group - CelesTrak group (visual, active, stations, weather, etc.)
+ * @param {number} limit - Maximum number of satellites to fetch
  * @returns {Promise<Array>} Array of satellite data
  */
-export const getAllSatellites = async (group = 'visual',limit = 1000, options = {}) => {
+export const getAllSatellites = async (group = 'visual', limit = 1000, options = {}) => {
   const { signal = undefined, forceRefresh = false } = options;
-  const cacheKey = String(group);
+  
+  // 3. Update the cache key so different limits don't overwrite each other
+  const cacheKey = `${group}-${limit}`;
 
   if (!forceRefresh) {
     const cached = getCachedGroup(cacheKey);
@@ -118,7 +124,8 @@ export const getAllSatellites = async (group = 'visual',limit = 1000, options = 
 
   const requestPromise = (async () => {
     try {
-      const data = await fetchSatellitesWithFallback(cacheKey, signal);
+      // 4. Pass the limit into the fetch handler
+      const data = await fetchSatellitesWithFallback(group, limit, signal);
       setCachedGroup(cacheKey, data);
       return data;
     } catch (error) {
@@ -138,7 +145,9 @@ export const getAllSatellites = async (group = 'visual',limit = 1000, options = 
     return await requestPromise;
   } finally {
     inflightSatelliteRequests.delete(cacheKey);
-  }};
+  }
+};
+
 /**
  * Fetch a specific satellite by NORAD ID
  * @param {string} noradId - The NORAD catalog ID
@@ -159,10 +168,10 @@ export const getSatelliteById = async (noradId) => {
  * @param {string} group - CelesTrak group to cache
  * @returns {Promise<Object>} Cache results
  */
-export const cacheSatellites = async (group = 'visual') => {
+export const cacheSatellites = async (group = 'visual', limit=1000) => {
   try {
     const baseUrl = fallback ? REMOTE_API_BASE : LOCAL_API_BASE;
-    const response = await fetch(`${baseUrl}/satellites/cache?group=${group}`, {
+    const response = await fetch(`${baseUrl}/satellites/cache?group=${group}&limit=${limit}`, {
       method: 'POST',
     });
     if (!response.ok) {
