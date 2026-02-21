@@ -21,11 +21,11 @@ def cache_satellites():
             results.append({"object_id": sat.get("OBJECT_ID", "unknown"), "error": str(e)})
     return {"results": results}
 
-@router.get("/satellites")
+@router.get("/satellites", response_model=List[SatelliteData])
 def list_satellites():
     return get_top100_satellites()
 
 
-@router.get("/satellites/{satellite_norad_id}", response_model=Satellite)
+@router.get("/satellites/{satellite_norad_id}", response_model=SatelliteData)
 def get_satellite(satellite_norad_id: str):
     return get_satellite_by_id(satellite_norad_id)

@@ -19,7 +19,7 @@ def get_top100_satellites():
         print(f"{len(orbital_list)} satellites retrieved")
         return orbital_list
     except Exception as e:
-        HTTPException(status_code=503, detail=f"CelesTrak API error: {str(e)}")
+        raise HTTPException(status_code=503, detail=f"CelesTrak API error: {str(e)}")
 
 def get_satellite_by_id(norad_id):
     # Defines URL as JSON, single satellite id
@@ -34,8 +34,11 @@ def get_satellite_by_id(norad_id):
         if not isinstance(orbital_list, list):
             orbital_list = [orbital_list]
 
-        # Returns valid satellites collected (should be ~100)
-        print(f"{len(orbital_list)} satellites retrieved")
-        return orbital_list
+        if not orbital_list:
+            raise HTTPException(status_code=404, detail="Satellite not found")
+
+        # Returns single satellite
+        print(f"Satellite {norad_id} retrieved")
+        return orbital_list[0]
     except Exception as e:
-        HTTPException(status_code=503, detail=f"Collecting sat by id API error: {str(e)}")
+        raise HTTPException(status_code=503, detail=f"Collecting sat by id API error: {str(e)}")

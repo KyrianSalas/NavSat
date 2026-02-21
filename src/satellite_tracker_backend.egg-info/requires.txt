@@ -4,6 +4,7 @@ pydantic-settings
 celest
 uvicorn
 python-dotenv
+supabase
 
 [dev]
 pytest
