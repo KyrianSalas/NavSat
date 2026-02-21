@@ -55,7 +55,7 @@ export function ensureSidebarStyles() {
 
     #${SIDEBAR_ID}.is-collapsed .sidebar-topbar {
       position: fixed;
-      top: 50%;
+      top: 3.5%;
       right: 8px;
       transform: translateY(-50%);
       justify-content: center;
