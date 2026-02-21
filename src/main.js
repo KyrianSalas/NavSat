@@ -65,6 +65,21 @@ const specularMap = loader.load('https://unpkg.com/three-globe@2.35.0/example/im
 const cityLightsMap = loader.load('https://unpkg.com/three-globe@2.35.0/example/img/earth-night.jpg');
 cityLightsMap.colorSpace = THREE.SRGBColorSpace;
 
+const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
+colorMap.anisotropy = maxAnisotropy;
+normalMap.anisotropy = maxAnisotropy;
+specularMap.anisotropy = maxAnisotropy;
+cityLightsMap.anisotropy = maxAnisotropy;
+
+// 4K cloud texture with transparency for a detailed atmospheric shell.
+const cloudColorMap = loader.load('https://raw.githubusercontent.com/turban/webgl-earth/master/images/fair_clouds_4k.png');
+cloudColorMap.colorSpace = THREE.SRGBColorSpace;
+cloudColorMap.anisotropy = maxAnisotropy;
+
+const cloudAlphaMap = loader.load('https://raw.githubusercontent.com/turban/webgl-earth/master/images/fair_clouds_4k.png');
+cloudAlphaMap.colorSpace = THREE.NoColorSpace;
+cloudAlphaMap.anisotropy = maxAnisotropy;
+
 // --- Globe (PBR Material) ---
 // metalness kept low — Earth is mostly dielectric
 // roughnessMap uses the specular/water map so oceans appear glossy
@@ -109,6 +124,24 @@ globe.material.onBeforeCompile = (shader) => {
   );
 };
 scene.add(globe);
+
+const cloudLayer = new THREE.Mesh(
+  new THREE.SphereGeometry(1.01, 192, 192),
+  new THREE.MeshStandardMaterial({
+    map: cloudColorMap,
+    alphaMap: cloudAlphaMap,
+    transparent: true,
+    opacity: 0.88,
+    alphaTest: 0.05,
+    depthWrite: false,
+    roughness: 0.9,
+    metalness: 0.0,
+    displacementMap: cloudAlphaMap,
+    displacementScale: 0.004,
+    displacementBias: -0.0015,
+  })
+);
+scene.add(cloudLayer);
 
 // --- Starfield ---
 // 2000 random points scattered in a large cube around the scene
@@ -202,6 +235,7 @@ window.addEventListener('resize', () => {
 
 renderer.setAnimationLoop(() => {
     updateISS();
+    cloudLayer.rotation.y += 0.00008;
     controls.update();
     renderer.render(scene, camera);
 });
