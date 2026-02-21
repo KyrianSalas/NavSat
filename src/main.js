@@ -14,6 +14,7 @@ import { ensureTopBarStyles } from './widgets/ui/styles.js';
 import { setupStormMarkers } from './widgets/stormMarkers.js';
 import { setupSatelliteLegend } from './widgets/satelliteLegend.js';
 import * as service from './api/satelliteService.js'
+import { select } from 'three/tsl';
 
 // Apply styles
 ensureTopBarStyles();
@@ -1018,24 +1019,27 @@ function onCanvasClick(event) {
   // 2. Check for Satellite clicks
   if (satInstancedMesh) {
       const intersects = raycaster.intersectObject(satInstancedMesh);
-      if (intersects.length > 0 && !selectedSatellite && !selectedStorm) {
+      if (intersects.length > 0) {
         const instanceId = intersects[0].instanceId;
         const clickedSat = activeSatellites[instanceId];
-        if (clickedSat) {
+        if (clickedSat && clickedSat !== selectedSatellite) {
           selectSatellite(clickedSat);
         }
-      } else if (selectedSatellite || selectedStorm) {
-        deselectSatellite(); 
+        return;
       }
   }
-}
 
+  if (selectedSatellite || selectedStorm) {
+      deselectSatellite();
+  }
+}
 // Called when the user clicks a satellite
 function selectSatellite(sat) {
     if (isAnimatingCameraRef.current) {
         return;
     }
   selectedSatellite = sat;
+  selectedStorm = null;
   isAnimatingCameraRef.current = true;
   controls.enabled = false;
   calloutLayout.initialized = false;
