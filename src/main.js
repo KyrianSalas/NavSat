@@ -200,6 +200,9 @@ function updateSatellites() {
 
 // --- Click handling for satellite selection ---
 function onCanvasClick(event) {
+  // Prevent clicks during animation
+  if (isAnimatingCamera) return;
+  
   // Calculate mouse position in normalized device coordinates
   const rect = renderer.domElement.getBoundingClientRect();
   mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -208,29 +211,34 @@ function onCanvasClick(event) {
   // Update raycaster
   raycaster.setFromCamera(mouse, camera);
 
-  // Check if satellite is clicked
-  const intersects = raycaster.intersectObject(issMesh, true);
-
-  console.log('Click detected. Intersects:', intersects.length, 'Selected:', selectedSatellite);
+  // Check if any satellite is clicked - get all satellite meshes
+  const satelliteMeshes = activeSatellites.map(sat => sat.mesh);
+  const intersects = raycaster.intersectObjects(satelliteMeshes, true);
 
   if (intersects.length > 0 && !selectedSatellite) {
-    console.log('Selecting satellite');
-    selectSatellite();
+    // Find which satellite was clicked
+    const clickedMesh = intersects[0].object;
+    const clickedSat = activeSatellites.find(sat => sat.mesh === clickedMesh);
+    if (clickedSat) {
+      selectSatellite(clickedSat);
+    }
   } else if (selectedSatellite) {
-    console.log('Deselecting satellite');
     deselectSatellite();
   }
 }
 
-function selectSatellite() {
-  selectedSatellite = issMesh;
+function selectSatellite(sat) {
+  selectedSatellite = sat;
   isAnimatingCamera = true;
   controls.enabled = false;
 
   // Show info box
   const infoBox = document.getElementById('infoBox');
   const satelliteDetails = document.getElementById('satelliteDetails');
-  satelliteDetails.textContent = issJson.OBJECT_NAME + '\n\nNORAD ID: ' + issJson.NORAD_CAT_ID;
+  
+  // Get satellite data from the selected satellite
+  const satData = satelliteDataMap[sat.id];
+  satelliteDetails.textContent = satData.OBJECT_NAME + '\n\nNORAD ID: ' + satData.NORAD_CAT_ID;
   infoBox.classList.add('visible');
 
   // Animate camera to focus on satellite
@@ -239,7 +247,7 @@ function selectSatellite() {
   const startTime = Date.now();
 
   const startPosition = camera.position.clone();
-  const targetPosition = issMesh.position.clone().normalize().multiplyScalar(targetDistance);
+  const targetPosition = sat.mesh.position.clone().normalize().multiplyScalar(targetDistance);
 
   const animateCamera = () => {
     const elapsed = Date.now() - startTime;
@@ -249,7 +257,7 @@ function selectSatellite() {
     const easeProgress = 1 - Math.pow(1 - progress, 3);
 
     camera.position.lerpVectors(startPosition, targetPosition, easeProgress);
-    camera.lookAt(issMesh.position);
+    camera.lookAt(sat.mesh.position);
 
     if (progress < 1) {
       requestAnimationFrame(animateCamera);
@@ -270,13 +278,12 @@ function deselectSatellite() {
   const infoBox = document.getElementById('infoBox');
   infoBox.classList.remove('visible');
 
-  // Animate camera back to normal distance (zoom out)
+  // Animate camera back to original position
   const duration = 1000; // milliseconds
   const startTime = Date.now();
 
   const startPosition = camera.position.clone();
-  const satelliteDirection = issMesh.position.clone().normalize();
-  const targetPosition = satelliteDirection.multiplyScalar(3); // Normal viewing distance
+  const targetPosition = new THREE.Vector3(0, 0, 3);
 
   const animateCamera = () => {
     const elapsed = Date.now() - startTime;
@@ -286,7 +293,7 @@ function deselectSatellite() {
     const easeProgress = 1 - Math.pow(1 - progress, 3);
 
     camera.position.lerpVectors(startPosition, targetPosition, easeProgress);
-    camera.lookAt(issMesh.position);
+    camera.lookAt(0, 0, 0);
 
     if (progress < 1) {
       requestAnimationFrame(animateCamera);
