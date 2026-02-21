@@ -97,7 +97,7 @@ export function setupPlanetVisuals({ scene, camera, renderer }) {
   normalMap.colorSpace = THREE.NoColorSpace;
 
   const specularMap = loader.load('https://unpkg.com/three-globe@2.35.0/example/img/earth-water.png');
-  const cityLightsMap = loader.load('https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/planets/earth_lights_2048.png');
+  const cityLightsMap = loader.load('/textures/dmsp_4096.png');
   cityLightsMap.colorSpace = THREE.SRGBColorSpace;
 
   const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
@@ -372,9 +372,35 @@ export function setupPlanetVisuals({ scene, camera, renderer }) {
 
   const sunDirectionScene = new THREE.Vector3();
   const SUN_LIGHT_DISTANCE = 8;
+  // Temporary Saudi daylight test override (disabled).
+  // const TEMP_FORCE_SUN_OVER_SAUDI = true;
+  // const SAUDI_TEST_COORDS = {
+  //   latitude: 24.7136,
+  //   longitude: 46.6753,
+  // };
+  //
+  // function latLonToSceneDirection(latitudeDeg, longitudeDeg) {
+  //   const lat = THREE.MathUtils.degToRad(latitudeDeg);
+  //   const lon = THREE.MathUtils.degToRad(longitudeDeg);
+  //
+  //   return new THREE.Vector3(
+  //     Math.cos(lat) * Math.cos(lon),
+  //     Math.sin(lat),
+  //     Math.cos(lat) * Math.sin(-lon)
+  //   ).normalize();
+  // }
 
   // Keeps illumination aligned with real UTC time.
   function updateRealTimeSun(date = new Date()) {
+    // if (TEMP_FORCE_SUN_OVER_SAUDI) {
+    //   sunDirectionScene.copy(
+    //     latLonToSceneDirection(SAUDI_TEST_COORDS.latitude, SAUDI_TEST_COORDS.longitude)
+    //   );
+    //   sunLight.position.copy(sunDirectionScene).multiplyScalar(SUN_LIGHT_DISTANCE);
+    //   moonLight.position.copy(sunDirectionScene).multiplyScalar(-SUN_LIGHT_DISTANCE * 0.95);
+    //   return;
+    // }
+
     const julianDay = satellite.jday(date);
     const { rsun } = satellite.sunPos(julianDay);
     const gmst = satellite.gstime(date);
