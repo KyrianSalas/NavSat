@@ -18,7 +18,7 @@ export async function getUserLocation() {
       (error) => {
         reject(new Error(`Geolocation error: ${error.message}`));
       },
-      { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   });
 }
