@@ -301,47 +301,49 @@ function buildSatelliteMeshes() {
     const satKeys = Object.keys(satelliteDataMap);
     const numSatellites = satKeys.length;
     
-    // 1. Clean up existing mesh from the previous chunk/load
-    if (satInstancedMesh) {
-        scene.remove(satInstancedMesh);
-        satInstancedMesh.dispose();
-    }
-
-    // 2. Clear trails and tracking array
-    // We only remove trail lines if we are doing a fresh build
+    // 1. CLEANUP: Remove old trails from the scene before clearing the array
     activeSatellites.forEach(sat => {
         if (sat.trailLine) {
             scene.remove(sat.trailLine);
-            sat.trailGeometry.dispose();
+            if (sat.trailGeometry) sat.trailGeometry.dispose();
         }
     });
     activeSatellites.length = 0;
 
-    const now = new Date();
-    const gmstNow = satellite.gstime(now);
+    // 2. DISPOSE: Remove the old InstancedMesh entirely to resize for the new count
+    if (satInstancedMesh) {
+        scene.remove(satInstancedMesh);
+        satInstancedMesh.dispose();
+        // If you are using a custom material with textures, dispose it here too
+    }
 
-    // 3. Create the new InstancedMesh for the current total count
+    // 3. INITIALISE: Create the new mesh for the current total count
     satInstancedMesh = new THREE.InstancedMesh(sharedSatGeometry, sharedSatMaterial, numSatellites);
     satInstancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     satInstancedMesh.frustumCulled = false;
     scene.add(satInstancedMesh);
 
+    const now = new Date();
+    const gmstNow = satellite.gstime(now);
     const renderTrails = numSatellites < RENDER_TRAILS_THRESHOLD;
     const satColor = new THREE.Color();
 
-    // 4. Populate the mesh and tracking array
+    // 4. POPULATE: Loop through ALL currently loaded satellites
     for (let index = 0; index < satKeys.length; index += 1) {
         const satId = satKeys[index];
         const jsonData = satelliteDataMap[satId];
+        
+        // Convert JSON TLE data to a satellite record
         const satrec = satellite.json2satrec(jsonData);
         
+        // Apply Geopolitical colour
         satColor.setHex(getSatelliteColorHex(jsonData));
         satInstancedMesh.setColorAt(index, satColor);
 
         let trailGeo = null;
         let trailLine = null;
 
-        // Only build trails for small datasets to maintain performance
+        // Create trails only if we are below the performance threshold
         if (renderTrails) {
             const trailColors = [];
             const colorHelper = new THREE.Color();
@@ -359,6 +361,7 @@ function buildSatelliteMeshes() {
             scene.add(trailLine);
         }
 
+        // Calculate initial position for this frame
         const posAndVel = satellite.propagate(satrec, now);
         let altitudeKm = 0;
         let speedKms = 0;
@@ -388,6 +391,7 @@ function buildSatelliteMeshes() {
             angleDeg = (THREE.MathUtils.radToDeg(Math.atan2(z, x)) + 360) % 360;
         }
 
+        // Add to the active tracking list for the update loop
         activeSatellites.push({
             id: satId,
             satrec: satrec,
@@ -401,7 +405,7 @@ function buildSatelliteMeshes() {
         });
     }
 
-    // 5. Commit updates to GPU
+    // 5. UPDATE GPU: Tell Three.js to send the new data to the shaders
     if (satInstancedMesh.instanceColor) {
         satInstancedMesh.instanceColor.needsUpdate = true;
     }
@@ -443,39 +447,33 @@ async function loadSatellites(group = "active") {
     satelliteLoadController = new AbortController();
 
     try {
-        // Clear existing satellites immediately for a fresh start
-        clearSatellites();
+        clearSatellites(); // Start fresh
 
         while (loadedCount < currentSatelliteLimit) {
-            // Calculate how many to fetch in this batch
             const remaining = currentSatelliteLimit - loadedCount;
             const limitToFetch = Math.min(CHUNK_SIZE, remaining);
 
-            const chunk = await service.getAllSatellites(
-                group, 
-                limitToFetch, 
-                { 
-                    offset: loadedCount, // Pass the offset to the service
-                    signal: satelliteLoadController.signal 
-                }
-            );
+            const chunk = await service.getAllSatellites(group, limitToFetch, { 
+                offset: loadedCount,
+                signal: satelliteLoadController.signal 
+            });
 
-            if (loadToken !== satelliteLoadToken || chunk.length === 0) break;
+            if (loadToken !== satelliteLoadToken || !chunk || chunk.length === 0) break;
 
-            // Add this chunk to our data map
+            // 1. Add chunk to map
             chunk.forEach(sat => {
                 satelliteDataMap[sat.OBJECT_ID] = sat;
             });
 
             loadedCount += chunk.length;
+
+            // 2. TRIGGER A FULL REBUILD (Since InstancedMesh size is fixed)
+            buildSatelliteMeshes(); 
             
-            // Rebuild meshes immediately so the user sees progress!
-            buildSatelliteMeshes();
-            
-            console.log(`Progress: ${loadedCount}/${currentSatelliteLimit} loaded.`);
-            
-            // Small delay to keep the UI thread responsive
-            await new Promise(r => setTimeout(r, 10));
+            console.log(`Loaded ${loadedCount} satellites...`);
+
+            // 3. Yield to the browser so the UI actually renders the new dots
+            await new Promise(r => requestAnimationFrame(r));
         }
 
         initializeSidebar();
