@@ -770,14 +770,14 @@ function selectSatellite(sat) {
     // Extract the position vector from that matrix
     targetSatPosition.setFromMatrixPosition(tempMatrix);
 
-    // Animate camera to focus on satellite
-    const targetDistance = 2;
+    // Zoom into the satellite
+    const zoomDistance = 0.3; // How close to get to satellite
     const duration = 1000; // milliseconds
     const startTime = Date.now();
 
     const startPosition = camera.position.clone();
-    // Use the extracted position for our target calculations
-    const targetCameraPosition = targetSatPosition.clone().normalize().multiplyScalar(targetDistance);
+    // Position camera near the satellite, slightly offset outward from Earth center
+    var targetCameraPosition = targetSatPosition.clone().normalize().multiplyScalar(targetSatPosition.length() + zoomDistance);
 
     const animateCamera = () => {
         const elapsed = Date.now() - startTime;
@@ -787,7 +787,7 @@ function selectSatellite(sat) {
         const easeProgress = 1 - Math.pow(1 - progress, 3);
 
         camera.position.lerpVectors(startPosition, targetCameraPosition, easeProgress);
-        camera.lookAt(targetSatPosition); // Look exactly at the satellite
+        camera.lookAt(0, 0, 0); // Look back towards Earth
 
         if (progress < 1) {
             requestAnimationFrame(animateCamera);
