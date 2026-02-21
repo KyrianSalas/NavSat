@@ -46,18 +46,38 @@ function setCenterLocationButtonEnabled(enabled) {
 const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
 camera.position.copy(defaultCameraPosition);
 const planetVisuals = setupPlanetVisuals({ scene, camera, renderer });
-setupSidebar({
-  postProcessing: {
-    cycleMode: () => planetVisuals.cyclePostFxMode(),
-    getActiveMode: () => planetVisuals.getActivePostFxMode(),
-  },
-  environmentLayers: {
-    cloudLayer: planetVisuals.cloudLayer,
-    atmosphereLayer: planetVisuals.atmosphereLayer,
-  },
-  centerLocationButton,
-  onResetCameraView: () => resetCameraToStartView(),
-});
+
+// Sidebar will be set up after satellites load
+let sidebarManager = null;
+
+function initializeSidebar() {
+  if (sidebarManager) {
+    // If sidebar already exists, just skip re-initialization
+    return;
+  }
+  
+  sidebarManager = setupSidebar({
+    postProcessing: {
+      cycleMode: () => planetVisuals.cyclePostFxMode(),
+      getActiveMode: () => planetVisuals.getActivePostFxMode(),
+    },
+    environmentLayers: {
+      cloudLayer: planetVisuals.cloudLayer,
+      atmosphereLayer: planetVisuals.atmosphereLayer,
+    },
+    centerLocationButton,
+    onResetCameraView: () => resetCameraToStartView(),
+    satelliteData: {
+      activeSatellites,
+      satelliteDataMap,
+    },
+    onSelectSatellite: (sat) => {
+      if (typeof selectSatellite === 'function') {
+        selectSatellite(sat);
+      }
+    },
+  });
+}
 
 // --- Controls ---
 
@@ -314,6 +334,8 @@ async function loadSatellites(group = "active") {
 
         console.log(`Successfully loaded ${jsonArray.length} satellites for group: ${group}.`);
         buildSatelliteMeshes();
+        // Initialize sidebar with satellite data
+        initializeSidebar();
 
     } catch (error) {
         console.error("Failed to load satellites.", error);

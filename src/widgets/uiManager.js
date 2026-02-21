@@ -9,11 +9,13 @@ import {
 } from './ui/sections.js';
 
 export class UIManager {
-  constructor({ postProcessing, environmentLayers, centerLocationButton, onResetCameraView }) {
+  constructor({ postProcessing, environmentLayers, centerLocationButton, onResetCameraView, satelliteData, onSelectSatellite }) {
     this.postProcessing = postProcessing;
     this.environmentLayers = environmentLayers;
     this.centerLocationButton = centerLocationButton;
     this.onResetCameraView = onResetCameraView;
+    this.satelliteData = satelliteData;
+    this.onSelectSatellite = onSelectSatellite;
 
     this.sidebar = null;
     this.sidebarContent = null;
@@ -54,6 +56,8 @@ export class UIManager {
     mountSatelliteSearchSection({
       sidebarContent: this.sidebarContent,
       createWidget: (title) => this.createWidget(title),
+      satelliteData: this.satelliteData,
+      onSelectSatellite: this.onSelectSatellite,
     });
   }
 
