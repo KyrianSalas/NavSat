@@ -12,6 +12,7 @@ import { centerToUserLocation } from './widgets/centerToUserLocation.js';
 import { setupGroupSelector } from './widgets/groupSelector.js';
 import { ensureTopBarStyles } from './widgets/ui/styles.js';
 import { setupStormMarkers } from './widgets/stormMarkers.js';
+import { setupSatelliteLegend } from './widgets/satelliteLegend.js';
 import * as service from './api/satelliteService.js'
 
 // Apply styles
@@ -56,12 +57,23 @@ const planetVisuals = setupPlanetVisuals({ scene, camera, renderer });
 // Sidebar will be set up after satellites load
 let sidebarManager = null;
 let groupSelectorConfig = null;
+let satelliteLegend = null;
 const stormSystem = setupStormMarkers(scene);
 
 // --- SATELLITE LIMIT & CACHE STATE ---
 let currentGroup = 'active';
 let currentSatelliteLimit = 1000;
 let fullGroupCache = []
+
+const SATELLITE_LEGEND_ITEMS = [
+  { label: 'US / NASA / Starlink', color: '#00ffff' },
+  { label: 'Russia / Soviet', color: '#ff2222' },
+  { label: 'China', color: '#ffcc00' },
+  { label: 'ESA / Europe', color: '#3388ff' },
+  { label: 'Japan', color: '#ffffff' },
+  { label: 'India', color: '#ff8800' },
+  { label: 'Other', color: '#cc55ff' },
+];
 
 function initializeSidebar() {
   if (sidebarManager) {
@@ -103,6 +115,12 @@ function initializeSidebar() {
     setupGroupSelector({
       ...groupSelectorConfig,
       mountTarget: sidebarManager.sidebarContent,
+    });
+  }
+
+  if (!satelliteLegend) {
+    satelliteLegend = setupSatelliteLegend({
+      items: SATELLITE_LEGEND_ITEMS,
     });
   }
   

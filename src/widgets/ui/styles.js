@@ -338,6 +338,107 @@ export function ensureSidebarStyles() {
       cursor: not-allowed;
     }
 
+    #satelliteLegend {
+      position: fixed;
+      left: 14px;
+      bottom: 18px;
+      min-width: 190px;
+      max-width: 250px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(162, 197, 255, 0.3);
+      background: linear-gradient(160deg, rgba(11, 21, 39, 0.92), rgba(7, 14, 28, 0.86));
+      color: #e5f0ff;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
+      font-family: "Electrolize", "Segoe UI", sans-serif;
+      z-index: 90;
+      pointer-events: auto;
+      transition: min-width 0.18s ease, padding 0.18s ease;
+    }
+
+    #satelliteLegend.is-collapsed {
+      min-width: 120px;
+    }
+
+    .satellite-legend__header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .satellite-legend__title {
+      margin: 0;
+      color: #18f5ff;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .satellite-legend__toggle {
+      width: 18px;
+      height: 18px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid rgba(145, 196, 255, 0.6);
+      border-radius: 4px;
+      background: rgba(10, 24, 45, 0.85);
+      color: #18f5ff;
+      cursor: pointer;
+      padding: 0;
+      font-size: 11px;
+      line-height: 1;
+      font-family: "Electrolize", "Segoe UI", sans-serif;
+    }
+
+    .satellite-legend__toggle:hover {
+      background: rgba(16, 35, 64, 0.95);
+      border-color: rgba(170, 220, 255, 0.8);
+    }
+
+    .satellite-legend__list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    #satelliteLegend.is-collapsed .satellite-legend__header {
+      margin-bottom: 0;
+    }
+
+    #satelliteLegend.is-collapsed .satellite-legend__list {
+      display: none;
+    }
+
+    .satellite-legend__item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      line-height: 1.2;
+      font-size: 11px;
+      color: #e5f0ff;
+    }
+
+    .satellite-legend__swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      border: 1px solid rgba(220, 235, 255, 0.55);
+      flex: 0 0 auto;
+    }
+
+    .satellite-legend__label {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
     @media (max-width: 640px) {
       #${SIDEBAR_ID} {
         width: min(260px, 76vw);
@@ -360,6 +461,14 @@ export function ensureSidebarStyles() {
         width: 34px;
         height: 34px;
         border-radius: 10px;
+      }
+
+      #satelliteLegend {
+        left: 10px;
+        bottom: 10px;
+        min-width: 160px;
+        max-width: min(210px, calc(100vw - 20px));
+        padding: 8px 10px;
       }
     }
   `;
