@@ -63,7 +63,7 @@ const stormSystem = setupStormMarkers(scene);
 
 // --- SATELLITE LIMIT & CACHE STATE ---
 let currentGroup = 'active';
-let currentSatelliteLimit = 5000;
+let currentSatelliteLimit = 14000;
 let fullGroupCache = []
 
 const SATELLITE_LEGEND_ITEMS = [
