@@ -112,6 +112,7 @@ addUserLocationMarker(scene);
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 let selectedSatellite = null;
+let selectedStorm = null;
 const isAnimatingCameraRef = { current: false };
 
 // --- User location ---
@@ -714,7 +715,7 @@ function updateCalloutTyping() {
 }
 
 function updateSatelliteCallout() {
-  if (!selectedSatellite || !satInstancedMesh) {
+  if (!selectedSatellite && !selectedStorm) {
     infoBox.classList.remove('visible');
     if (fireLaserButton) {
       fireLaserButton.disabled = true;
@@ -723,7 +724,6 @@ function updateSatelliteCallout() {
     return;
   }
 
-  // Only render callout once camera transition has settled on target.
   if (isAnimatingCameraRef.current) {
     infoBox.classList.remove('visible');
     if (fireLaserButton) {
@@ -732,9 +732,17 @@ function updateSatelliteCallout() {
     return;
   }
 
-  const tempMatrix = new THREE.Matrix4();
-  satInstancedMesh.getMatrixAt(selectedSatellite.index, tempMatrix);
-  const currentPos = new THREE.Vector3().setFromMatrixPosition(tempMatrix);
+  let currentPos;
+  
+  if (selectedSatellite && satInstancedMesh) {
+    const tempMatrix = new THREE.Matrix4();
+    satInstancedMesh.getMatrixAt(selectedSatellite.index, tempMatrix);
+    currentPos = new THREE.Vector3().setFromMatrixPosition(tempMatrix);
+  } else if (selectedStorm) {
+    currentPos = selectedStorm.position.clone();
+  } else {
+    return; 
+  }
 
   // Project that 3D position to the 2D screen
     projectedSatelliteScreen.copy(currentPos).project(camera);
@@ -824,31 +832,39 @@ function updateSatelliteCallout() {
   infoBox.classList.add('visible');
 }
 
-// --- Click handling for satellite selection ---
 function onCanvasClick(event) {
-  // Prevent clicks during animation
-  if (isAnimatingCameraRef.current || !satInstancedMesh) return;
+  if (isAnimatingCameraRef.current) return;
 
-  // Calculate mouse position in normalized device coordinates
   const rect = renderer.domElement.getBoundingClientRect();
   mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
   mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
-  // Update raycaster
   raycaster.setFromCamera(mouse, camera);
 
-  // Check if any satellite is clicked - get all satellite meshes
-  const intersects = raycaster.intersectObject(satInstancedMesh);
+  // 1. Check for Storm clicks first
+  if (stormSystem && stormSystem.group) {
+      const stormIntersects = raycaster.intersectObjects(stormSystem.group.children);
+      if (stormIntersects.length > 0) {
+          const clickedMesh = stormIntersects[0].object;
+          if (clickedMesh.userData && clickedMesh.userData.isStorm) {
+              selectStorm(clickedMesh.userData);
+              return;
+          }
+      }
+  }
 
-  if (intersects.length > 0 && !selectedSatellite) {
-    // Find which satellite was clicked
-    const instanceId = intersects[0].instanceId;
-    const clickedSat = activeSatellites.find(sat => sat.index === instanceId);
-    if (clickedSat) {
-      selectSatellite(clickedSat);
-    }
-  } else if (selectedSatellite) {
-    deselectSatellite();
+  // 2. Check for Satellite clicks
+  if (satInstancedMesh) {
+      const intersects = raycaster.intersectObject(satInstancedMesh);
+      if (intersects.length > 0 && !selectedSatellite && !selectedStorm) {
+        const instanceId = intersects[0].instanceId;
+        const clickedSat = activeSatellites.find(sat => sat.index === instanceId);
+        if (clickedSat) {
+          selectSatellite(clickedSat);
+        }
+      } else if (selectedSatellite || selectedStorm) {
+        deselectSatellite(); 
+      }
   }
 }
 
@@ -910,6 +926,51 @@ function selectSatellite(sat) {
     animateCamera();
 }
 
+
+function selectStorm(stormData) {
+    if (isAnimatingCameraRef.current) return;
+    
+    selectedStorm = stormData;
+    selectedSatellite = null; 
+    
+    isAnimatingCameraRef.current = true;
+    controls.enabled = false;
+    calloutLayout.initialized = false;
+    calloutReveal.active = false;
+    calloutReveal.progress = 0;
+    infoBox.classList.remove('visible');
+
+    const targetDistance = 2;
+    const duration = 1000;
+    const startTime = Date.now();
+
+    const startPosition = camera.position.clone();
+    const targetCameraPosition = stormData.position.clone().normalize().multiplyScalar(targetDistance);
+
+    const animateCamera = () => {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const easeProgress = 1 - Math.pow(1 - progress, 3);
+
+        camera.position.lerpVectors(startPosition, targetCameraPosition, easeProgress);
+        camera.lookAt(stormData.position); 
+
+        if (progress < 1) {
+            requestAnimationFrame(animateCamera);
+        } else {
+            isAnimatingCameraRef.current = false;
+            startCalloutReveal();
+            
+            // Format the NASA date nicely for the UI card
+            const dateStr = new Date(stormData.date).toLocaleDateString();
+            startCalloutTyping(stormData.title, `Type: Severe Weather\nDetected: ${dateStr}`);
+        }
+    };
+
+    animateCamera();
+}
+
+
 function animateCameraToDefaultView() {
   isAnimatingCameraRef.current = true;
   controls.enabled = false;
@@ -946,6 +1007,7 @@ function animateCameraToDefaultView() {
 
 function clearSelectedSatelliteState() {
   selectedSatellite = null;
+  selectedStorm = null;
   calloutTyping.active = false;
   calloutLayout.initialized = false;
   calloutReveal.active = false;
@@ -966,7 +1028,7 @@ function resetCameraToStartView() {
 }
 
 function deselectSatellite() {
-  if (!selectedSatellite) {
+  if (!selectedSatellite && !selectedStorm) {
     return;
   }
 

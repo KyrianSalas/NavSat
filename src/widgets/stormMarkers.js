@@ -73,6 +73,13 @@ export function setupStormMarkers(scene) {
             const mesh = new THREE.Mesh(geometry, material);
             mesh.position.set(x, y, z);
             mesh.lookAt(new THREE.Vector3(0, 0, 0));
+            
+            mesh.userData = {
+                isStorm: true,
+                title: storm.title,
+                date: storm.date,
+                position: new THREE.Vector3(x, y, z)
+            };
 
             // Add to our toggleable group instead of the scene directly
             stormGroup.add(mesh);
