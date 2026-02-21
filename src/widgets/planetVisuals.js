@@ -97,7 +97,7 @@ export function setupPlanetVisuals({ scene, camera, renderer }) {
   normalMap.colorSpace = THREE.NoColorSpace;
 
   const specularMap = loader.load('https://unpkg.com/three-globe@2.35.0/example/img/earth-water.png');
-  const cityLightsMap = loader.load('https://unpkg.com/three-globe@2.35.0/example/img/earth-night.jpg');
+  const cityLightsMap = loader.load('https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/planets/earth_lights_2048.png');
   cityLightsMap.colorSpace = THREE.SRGBColorSpace;
 
   const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
