@@ -267,28 +267,23 @@ export function mountSatelliteSettingsSection({ sidebarContent, createWidget, in
   const { container, contentArea } = createWidget('Satellite Settings');
 
   const row = document.createElement('div');
-  row.style.padding = '8px 0';
-  row.style.color = '#d7ecff';
-  row.style.fontSize = '14px';
-  row.style.display = 'flex';
-  row.style.justifyContent = 'space-between';
-  row.style.alignItems = 'center';
+  row.className = 'sidebar-field-row';
 
-  const label = document.createElement('span');
+  const label = document.createElement('label');
+  label.className = 'sidebar-field-label';
   label.textContent = 'Render Limit:';
+  label.htmlFor = 'satellite-render-limit-input';
 
   const input = document.createElement('input');
+  input.id = 'satellite-render-limit-input';
+  input.className = 'sidebar-field-input sidebar-field-input--compact';
   input.type = 'number';
   input.min = '10';
   input.max = '20000';
   input.step = '500';
   input.value = initialLimit || 1000;
-  input.style.width = '70px';
-  input.style.background = 'rgba(8, 18, 34, 0.7)';
-  input.style.color = '#fff';
-  input.style.border = '1px solid rgba(180, 215, 255, 0.45)';
-  input.style.borderRadius = '4px';
-  input.style.padding = '4px 6px';
+  input.inputMode = 'numeric';
+  input.setAttribute('aria-label', 'Render limit');
 
   input.addEventListener('change', (e) => {
     const val = parseInt(e.target.value, 10);

@@ -214,6 +214,55 @@ export function ensureSidebarStyles() {
       transform: translateX(16px);
     }
 
+    .sidebar-field-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 12px;
+      padding: 2px 0;
+    }
+
+    .sidebar-field-label {
+      color: #e4f0ff;
+      font-family: "Electrolize", "Segoe UI", sans-serif;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .sidebar-field-input {
+      box-sizing: border-box;
+      border: 1px solid rgba(174, 207, 255, 0.34);
+      border-radius: 12px;
+      background: rgba(6, 14, 28, 0.72);
+      color: #e7f0ff;
+      padding: 8px 10px;
+      font-family: "Electrolize", "Segoe UI", sans-serif;
+      font-size: 13px;
+      line-height: 1.2;
+      outline: none;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+      -moz-appearance: textfield;
+    }
+
+    .sidebar-field-input::-webkit-outer-spin-button,
+    .sidebar-field-input::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+
+    .sidebar-field-input:focus {
+      border-color: rgba(124, 184, 255, 0.92);
+      box-shadow: 0 0 0 3px rgba(88, 152, 232, 0.16);
+    }
+
+    .sidebar-field-input--compact {
+      width: 112px;
+    }
+
     .sidebar-footer {
       margin-top: 12px;
       border-top: 1px solid rgba(160, 193, 247, 0.22);
