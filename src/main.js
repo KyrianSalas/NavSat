@@ -6,6 +6,7 @@ import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import './test.js';
 import { setupPlanetVisuals } from './planetVisuals.js';
+import * as service from './api/satelliteService.js'
 
 
 // --- Renderer ---
@@ -130,10 +131,7 @@ function buildSatelliteMeshes() {
 
 async function loadSatellites() {
     try {
-        const response = await fetch('https://bris-hack-project-2026.vercel.app/satellites');
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-
-        const jsonArray = await response.json();
+        const jsonArray = service.getAllSatellites();
 
         jsonArray.forEach(satelliteObj => {
             satelliteDataMap[satelliteObj.OBJECT_ID] = satelliteObj;
