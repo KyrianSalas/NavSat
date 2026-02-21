@@ -16,10 +16,10 @@ export function ensureSidebarStyles() {
       --card-bg: linear-gradient(160deg, rgba(15, 25, 46, 0.88), rgba(10, 19, 35, 0.6));
       --card-border: rgba(162, 197, 255, 0.22);
       position: fixed;
-      top: 50px;
+      top: 0;
       right: 0;
       width: 320px;
-      height: calc(100vh - 50px);
+      height: 100vh;
       box-sizing: border-box;
       display: flex;
       flex-direction: column;
@@ -377,29 +377,23 @@ export function ensureTopBarStyles() {
   styleTag.textContent = `
     #topBar {
       position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 50px;
-      background: rgba(2, 12, 30, 0.3);
-      border-bottom: none;
+      top: 10px;
+      left: 12px;
+      right: auto;
+      height: auto;
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      padding: 0 20px;
+      justify-content: flex-start;
+      padding: 0;
       z-index: 50;
-      overflow: hidden;
+      background: transparent;
+      border: 0;
+      box-shadow: none;
+      overflow: visible;
     }
 
     #topBar::after {
-      content: '';
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      width: 25%;
-      height: 3px;
-      background: linear-gradient(to right, rgba(24, 245, 255, 0.4), rgba(24, 245, 255, 0));
-      pointer-events: none;
+      content: none;
     }
 
     #topBar h1 {
@@ -412,6 +406,19 @@ export function ensureTopBarStyles() {
       display: flex;
       align-items: center;
       gap: 8px;
+      position: relative;
+      padding-bottom: 4px;
+    }
+
+    #topBar h1::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      width: 155%;
+      bottom: 0;
+      height: 2px;
+      background: linear-gradient(to right, rgba(24, 245, 255, 0.5), rgba(24, 245, 255, 0));
+      pointer-events: none;
     }
 
     .header-logo {
@@ -421,7 +428,7 @@ export function ensureTopBarStyles() {
 
 canvas {
   display: block;
-  margin-top: 50px;
+  margin-top: 0;
 }
   `;
 
