@@ -28,7 +28,7 @@ controls.maxDistance = 10;
 
 // --- Texture Loading ---
 // Color map: Blue Marble (sRGB)
-// Normal map: Surface elevation detail (linear)
+// Normal map: Tangent-space Earth normals (linear / no color space)
 // Specular map: Used as inverse roughness — oceans are shiny, land is matte (linear)
 
 const loader = new THREE.TextureLoader();
@@ -36,7 +36,8 @@ const loader = new THREE.TextureLoader();
 const colorMap = loader.load('https://unpkg.com/three-globe@2.35.0/example/img/earth-blue-marble.jpg');
 colorMap.colorSpace = THREE.SRGBColorSpace;
 
-const normalMap = loader.load('https://unpkg.com/three-globe@2.35.0/example/img/earth-topology.png');
+const normalMap = loader.load('https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/planets/earth_normal_2048.jpg');
+normalMap.colorSpace = THREE.NoColorSpace;
 
 const specularMap = loader.load('https://unpkg.com/three-globe@2.35.0/example/img/earth-water.png');
 
@@ -53,7 +54,7 @@ const globe = new THREE.Mesh(
   new THREE.MeshStandardMaterial({
     map: colorMap,
     normalMap: normalMap,
-    normalScale: new THREE.Vector2(0.8, 0.8),
+    normalScale: new THREE.Vector2(0.25, 0.25),
     roughnessMap: specularMap,
     roughness: 0.9,
     metalness: 0.02,
@@ -63,6 +64,19 @@ const globe = new THREE.Mesh(
   })
 );
 globe.material.onBeforeCompile = (shader) => {
+  shader.fragmentShader = shader.fragmentShader.replace(
+    '#include <roughnessmap_fragment>',
+    `
+    float roughnessFactor = roughness;
+    #ifdef USE_ROUGHNESSMAP
+      vec4 texelRoughness = texture2D( roughnessMap, vRoughnessMapUv );
+      // Invert the green channel so water (white) becomes smooth (0.0) and land (black) becomes rough (1.0)
+      // Clamp slightly so ocean is not a perfect mirror.
+      roughnessFactor *= clamp(1.0 - texelRoughness.g, 0.1, 1.0);
+    #endif
+    `
+  );
+
   shader.fragmentShader = shader.fragmentShader.replace(
     '#include <emissivemap_fragment>',
     `#include <emissivemap_fragment>
@@ -93,7 +107,7 @@ scene.add(stars);
 
 // --- Lighting ---
 // Hemisphere approximates sky/ground bounce while directional acts as the sun.
-scene.add(new THREE.HemisphereLight(0x8fb8ff, 0x1f120a, 0.25));
+scene.add(new THREE.HemisphereLight(0x8fb8ff, 0x1f120a, 0.05));
 
 const sunLight = new THREE.DirectionalLight(0xfff1d6, 2.2);
 sunLight.position.set(5, 3, 5);
