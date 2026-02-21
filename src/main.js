@@ -29,6 +29,20 @@ const centerLocationButton = document.getElementById('centerLocationButton');
 const defaultCameraPosition = new THREE.Vector3(0, 0, 3);
 const defaultCameraTarget = new THREE.Vector3(0, 0, 0);
 
+function hasValidLocation(value) {
+  return Number.isFinite(value?.latitude) && Number.isFinite(value?.longitude);
+}
+
+function setCenterLocationButtonEnabled(enabled) {
+  if (!centerLocationButton) {
+    return;
+  }
+
+  centerLocationButton.disabled = !enabled;
+  centerLocationButton.setAttribute('aria-disabled', String(!enabled));
+  centerLocationButton.title = enabled ? 'Center on my location' : 'Location unavailable';
+}
+
 const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
 camera.position.copy(defaultCameraPosition);
 const planetVisuals = setupPlanetVisuals({ scene, camera, renderer });
@@ -63,10 +77,16 @@ const isAnimatingCameraRef = { current: false };
 
 // --- User location --- epic formatted comment
 let location = null
+setCenterLocationButtonEnabled(false);
 getUserLocation().then(loc => {
     location = loc;
+    setCenterLocationButtonEnabled(hasValidLocation(location));
     console.log('location:', location);
-}).catch(err => console.warn('Location access denied or failed:', err));
+}).catch(err => {
+  location = null;
+  setCenterLocationButtonEnabled(false);
+  console.warn('Location access denied or failed:', err);
+});
 console.log('location:', location);
 const projectedSatelliteScreen = new THREE.Vector3();
 
@@ -801,7 +821,7 @@ document.addEventListener('click', (event) => {
 // Center to user location button
 if (centerLocationButton) {
   centerLocationButton.addEventListener('click', () => {
-    if (location && location.latitude && location.longitude) {
+    if (hasValidLocation(location)) {
       centerToUserLocation({
         camera,
         controls,

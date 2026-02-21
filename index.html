@@ -111,13 +111,20 @@
         justify-content: center;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
       }
-      #centerLocationButton:hover {
+      #centerLocationButton:hover:enabled {
         background: rgba(12, 54, 96, 1);
         box-shadow: 0 0 20px rgba(24, 245, 255, 0.5), 0 4px 12px rgba(0, 0, 0, 0.4);
         transform: scale(1.05);
       }
-      #centerLocationButton:active {
+      #centerLocationButton:active:enabled {
         transform: scale(0.95);
+      }
+      #centerLocationButton:disabled {
+        background: rgba(74, 84, 98, 0.9);
+        border-color: rgba(149, 164, 181, 0.6);
+        color: rgba(208, 219, 232, 0.55);
+        box-shadow: none;
+        cursor: not-allowed;
       }
     </style>
   </head>

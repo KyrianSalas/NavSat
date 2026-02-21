@@ -269,14 +269,22 @@ export function ensureSidebarStyles() {
       z-index: 0;
     }
 
-    #${SIDEBAR_ID} #centerLocationButton:hover {
+    #${SIDEBAR_ID} #centerLocationButton:hover:enabled {
       background: rgba(18, 42, 78, 0.95);
       box-shadow: 0 10px 18px rgba(0, 0, 0, 0.3);
       transform: translateY(-1px);
     }
 
-    #${SIDEBAR_ID} #centerLocationButton:active {
+    #${SIDEBAR_ID} #centerLocationButton:active:enabled {
       transform: translateY(0);
+    }
+
+    #${SIDEBAR_ID} #centerLocationButton:disabled {
+      background: rgba(56, 64, 76, 0.74);
+      border-color: rgba(164, 174, 188, 0.5);
+      color: rgba(213, 224, 236, 0.52);
+      box-shadow: none;
+      cursor: not-allowed;
     }
   `;
 
