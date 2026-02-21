@@ -12,6 +12,7 @@ import { loadSatellites } from './widgets/loadSatellites.js';
 import { getSatelliteColor } from './widgets/getSatelliteColor.js';
 import { updateSatellites } from './widgets/updateSatellites.js';
 import { updateSatelliteCallout } from './widgets/updateCallouts.js';
+import { startAnimationLoop } from './widgets/startAnimationLoop.js';
 import * as service from './api/satelliteService.js'
 
 
@@ -291,25 +292,25 @@ window.addEventListener('resize', () => {
 
 // --- Animation Loop ---
 
-renderer.setAnimationLoop(() => {
-    updateSatellites({ activeSatellites, TRAIL_POINTS, TRAIL_LENGTH_MINUTES });
-    planetVisuals.update();
-    updateSatelliteCallout({
-        selectedSatellite,
-        isAnimatingCamera,
-        infoBox,
-        calloutLayout,
-        projectedSatelliteScreen,
-        camera,
-        calloutTyping,
-        infoTitle,
-        satelliteDetails,
-        measureCalloutTitleWidth,
-        calloutReveal,
-        infoCard,
-        infoConnectorPath,
-        infoConnectorStart
-    });
-    controls.update();
-    planetVisuals.render();
+startAnimationLoop({
+    renderer,
+    activeSatellites,
+    TRAIL_POINTS,
+    TRAIL_LENGTH_MINUTES,
+    planetVisuals,
+    selectedSatellite,
+    isAnimatingCamera,
+    infoBox,
+    calloutLayout,
+    projectedSatelliteScreen,
+    camera,
+    calloutTyping,
+    infoTitle,
+    satelliteDetails,
+    measureCalloutTitleWidth,
+    calloutReveal,
+    infoCard,
+    infoConnectorPath,
+    infoConnectorStart,
+    controls
 });
