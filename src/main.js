@@ -47,8 +47,8 @@ const satelliteDataMap = {};
 const activeSatellites = [];
 
 // Creating the visual marker (the red dot)
-const TRAIL_LENGTH_MINUTES = 5; // How long you want the tail to be
-const TRAIL_POINTS = 20; // Smoothness of the tail
+const TRAIL_LENGTH_MINUTES = 3; // How long you want the tail to be
+const TRAIL_POINTS = 5; // Smoothness of the tail
 
 const initialPositions = [];
 for (let i = 0; i < TRAIL_POINTS; i++) {
@@ -59,39 +59,68 @@ const sharedTrailMaterial = new LineMaterial({
     color: 0xffffff, // Use white so vertex colors show through correctly
     linewidth: 4,    // CHANGE THIS NUMBER TO MAKE IT WIDER/THINNER
     vertexColors: true, // Necessary for gradient
+    blending: THREE.AdditiveBlending,
+    transparent: true,
+    depthWrite: false,
     dashed: false,
-    alphaToCoverage: true, // Helps edges look smoother
+    alphaToCoverage: false,
 });
 
 sharedTrailMaterial.resolution.set(window.innerWidth, window.innerHeight);
 
-const sharedSatGeometry = new THREE.SphereGeometry(0.015,16,16)
+const sharedSatGeometry = new THREE.SphereGeometry(0.005,8,8)
 
 function getSatelliteColor(jsonData) {
-    const revsPerDay = jsonData.MEAN_MOTION;
+    const name = jsonData.OBJECT_NAME.toUpperCase();
 
-    // Keep GEO and MEO just in case you add other data types later!
-    if (revsPerDay > 0.9 && revsPerDay < 1.1) return new THREE.Color(0x00ff00); // GEO (Green)
-    if (revsPerDay > 1.9 && revsPerDay < 2.2) return new THREE.Color(0x00aaff); // MEO (Blue)
-
-    // Detailed LEO Breakdown for your specific dataset
-    if (revsPerDay >= 11 && revsPerDay < 13) {
-        return new THREE.Color(0xcc00ff); // Purple (~11-12 revs/day - Higher LEO)
-    }
-    else if (revsPerDay >= 13 && revsPerDay < 14) {
-        return new THREE.Color(0x00ffff); // Cyan (~13 revs/day)
-    }
-    else if (revsPerDay >= 14 && revsPerDay < 15) {
-        return new THREE.Color(0xffff00); // Yellow (~14 revs/day - Very common)
-    }
-    else if (revsPerDay >= 15 && revsPerDay < 16) {
-        return new THREE.Color(0xff6600); // Orange (~15 revs/day - Very common, lower altitude)
-    }
-    else if (revsPerDay >= 16) {
-        return new THREE.Color(0xff0000); // Red (16+ revs/day - Extremely fast, very low altitude)
+    // 1. Soviet / Russian (Red)
+    // COSMOS, SL- (Soviet launchers), INTERCOSMOS, RESURS, OKEAN, ZARYA (ISS module)
+    if (name.includes('COSMOS') || name.startsWith('SL-') ||
+        name.includes('INTERCOSMOS') || name.includes('RESURS') ||
+        name.includes('OKEAN') || name.includes('ZARYA')) {
+        return new THREE.Color(0xff2222);
     }
 
-    return new THREE.Color(0xffffff); // Catch-all Fallback (White)
+        // 2. Chinese (Gold / Yellow)
+    // CZ- (Long March), SHIJIAN, YAOGAN, HXMT, CSS (Chinese Space Station), SZ- (Shenzhou)
+    else if (name.startsWith('CZ-') || name.includes('SHIJIAN') ||
+        name.includes('YAOGAN') || name.includes('HXMT') ||
+        name.includes('CSS') || name.startsWith('SZ-')) {
+        return new THREE.Color(0xffcc00);
+    }
+
+        // 3. European Space Agency / Arianespace (Blue)
+    // ARIANE, ENVISAT, HELIOS
+    else if (name.includes('ARIANE') || name.includes('ENVISAT') || name.includes('HELIOS')) {
+        return new THREE.Color(0x3388ff);
+    }
+
+        // 4. Japanese (White)
+    // H-2A (Launcher), ALOS, ASTRO, AJISAI, MIDORI, XRISM
+    else if (name.includes('H-2A') || name.includes('ALOS') ||
+        name.includes('ASTRO') || name.includes('AJISAI') ||
+        name.includes('MIDORI') || name.includes('XRISM')) {
+        return new THREE.Color(0xffffff);
+    }
+
+        // 5. United States / NASA / Commercial US (Cyan/Light Blue)
+    // ATLAS, DELTA, THOR, TITAN, USA, OAO, SERT, SEASAT, AQUA, HST, ACS3
+    else if (name.includes('ATLAS') || name.includes('DELTA') ||
+        name.includes('THOR') || name.includes('TITAN') ||
+        name.startsWith('USA ') || name.includes('OAO') ||
+        name.includes('SERT') || name.includes('SEASAT') ||
+        name.includes('AQUA') || name.includes('HST') || name.includes('ACS3')) {
+        return new THREE.Color(0x00ffff);
+    }
+
+        // 6. Indian (Orange)
+    // GSLV
+    else if (name.includes('GSLV')) {
+        return new THREE.Color(0xff8800);
+    }
+
+    // Default Fallback for anything else (e.g., SAOCOM, ISIS, etc.) (Grey/Purple)
+    return new THREE.Color(0xcc55ff);
 }
 
 function buildSatelliteMeshes() {
@@ -104,8 +133,15 @@ function buildSatelliteMeshes() {
         const colorHelper = new THREE.Color();
         for (let i = 0; i < TRAIL_POINTS; i++) {
             const t = i / (TRAIL_POINTS - 1);
-            colorHelper.setRGB(satColor.r * t, satColor.g * t, satColor.b * t);
-            trailColors.push(colorHelper.r, colorHelper.g, colorHelper.b);
+            const intensity = Math.pow(t, 2.0);
+
+            colorHelper.setRGB(
+                satColor.r * intensity,
+                satColor.g * intensity,
+                satColor.b * intensity
+            );
+
+            trailColors.push(colorHelper.r, colorHelper.g, colorHelper.b)
         }
 
         const trailGeo = new LineGeometry();
@@ -130,7 +166,7 @@ function buildSatelliteMeshes() {
 
 async function loadSatellites() {
     try {
-        const jsonArray = await service.getAllSatellites();
+        const jsonArray = await service.getAllSatellites("stations");
 
         jsonArray.forEach(satelliteObj => {
             satelliteDataMap[satelliteObj.OBJECT_ID] = satelliteObj;
