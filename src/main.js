@@ -1,5 +1,27 @@
 import * as THREE from 'three';
+import * as satellite from "satellite.js"
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// Boilerplate data
+const issJson = {
+    "OBJECT_NAME": "ATLAS CENTAUR 2",
+    "OBJECT_ID": "1963-047A",
+    "EPOCH": "2026-02-21T01:44:49.601184",
+    "MEAN_MOTION": 14.12016381,
+    "ECCENTRICITY": 0.05481215,
+    "INCLINATION": 30.357,
+    "RA_OF_ASC_NODE": 288.5064,
+    "ARG_OF_PERICENTER": 293.848,
+    "MEAN_ANOMALY": 60.5614,
+    "EPHEMERIS_TYPE": 0,
+    "CLASSIFICATION_TYPE": "U",
+    "NORAD_CAT_ID": 694,
+    "ELEMENT_SET_NO": 999,
+    "REV_AT_EPOCH": 12927,
+    "BSTAR": 0.00012889653,
+    "MEAN_MOTION_DOT": 0.00001171,
+    "MEAN_MOTION_DDOT": 0
+};
 
 const canvas = document.getElementById('canvas');
 
@@ -46,6 +68,62 @@ const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
 dirLight.position.set(5, 3, 5);
 scene.add(dirLight);
 
+// Converting JSON to a Satellite Record
+const satrec = satellite.json2satrec(issJson);
+
+// Creating the visual marker (the red dot)
+const MAX_POINTS = 500;
+const trailGeometry = new THREE.BufferGeometry();
+const trailVertices = new Float32Array(MAX_POINTS * 3);
+trailGeometry.setAttribute('position', new THREE.BufferAttribute(trailVertices, 3));
+const trailMaterial = new THREE.LineBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.5 });
+const trailLine = new THREE.Line(trailGeometry, trailMaterial);
+scene.add(trailLine);
+
+const issMesh = new THREE.Mesh(
+    new THREE.SphereGeometry(0.01, 16, 16), // Made slightly larger to find it easier
+    new THREE.MeshBasicMaterial({ color: 0xff0000 })
+);
+scene.add(issMesh);
+
+let trailIndex = 0;
+
+function updateISS() {
+    const now = new Date();
+    const positionAndVelocity = satellite.propagate(satrec, now);
+    const positionEci = positionAndVelocity.position;
+
+    if (positionEci) {
+        const gmst = satellite.gstime(now);
+        const positionGd = satellite.eciToGeodetic(positionEci, gmst);
+
+        const lon = positionGd.longitude;
+        const lat = positionGd.latitude;
+        const alt = positionGd.height;
+
+        // Radius = Earth(1) + Altitude.
+        // We multiply alt by a factor if we want to "exaggerate" the height for visibility
+        const r = 1 + (alt / 6371);
+
+        const x = r * Math.cos(lat) * Math.cos(lon);
+        const y = r * Math.sin(lat);
+        const z = r * Math.cos(lat) * Math.sin(-lon); // Negative lon matches most textures
+
+        issMesh.position.set(x, y, z);
+
+        // --- Update Trail ---
+        // Shift existing points or just add a new one every few frames
+        trailVertices[trailIndex * 3] = x;
+        trailVertices[trailIndex * 3 + 1] = y;
+        trailVertices[trailIndex * 3 + 2] = z;
+
+        trailIndex = (trailIndex + 1) % MAX_POINTS;
+        trailGeometry.attributes.position.needsUpdate = true;
+    } else {
+        console.error("Satellite math failed. Check TLE strings.");
+    }
+}
+
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
@@ -53,6 +131,7 @@ window.addEventListener('resize', () => {
 });
 
 renderer.setAnimationLoop(() => {
-  controls.update();
-  renderer.render(scene, camera);
+    updateISS();
+    controls.update();
+    renderer.render(scene, camera);
 });
