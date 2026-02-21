@@ -1,12 +1,13 @@
 const API_BASE_URL = 'http://localhost:8000/api';
 
 /**
- * Fetch all satellites from the cache
+ * Fetch satellites by CelesTrak group
+ * @param {string} group - CelesTrak group (visual, active, stations, weather, etc.)
  * @returns {Promise<Array>} Array of satellite data
  */
-export const getAllSatellites = async () => {
+export const getTop100Satellites = async (group = 'visual') => {
   try {
-    const response = await fetch(`${API_BASE_URL}/satellites`);
+    const response = await fetch(`${API_BASE_URL}/satellites?group=${group}`);
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
@@ -37,11 +38,12 @@ export const getSatelliteById = async (noradId) => {
 
 /**
  * Cache satellites from the CelesTrak API
+ * @param {string} group - CelesTrak group to cache
  * @returns {Promise<Object>} Cache results
  */
-export const cacheSatellites = async () => {
+export const cacheSatellites = async (group = 'visual') => {
   try {
-    const response = await fetch(`${API_BASE_URL}/satellites/cache`, {
+    const response = await fetch(`${API_BASE_URL}/satellites/cache?group=${group}`, {
       method: 'POST',
     });
     if (!response.ok) {
