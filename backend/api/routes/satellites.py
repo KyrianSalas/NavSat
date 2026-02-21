@@ -19,7 +19,7 @@ satellites_db = [
 	Satellite(id="40069", name="Hubble", position={"lat": 28.5, "lon": -80.6, "alt": 547}, status="active"),
 ]
 
-@router.get("/satellites", response_model=List[Satellite])
+@router.get("/satellites")
 def list_satellites():
 	# return satellites_db
 	return get_top100_satellites()
