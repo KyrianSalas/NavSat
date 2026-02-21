@@ -47,9 +47,33 @@ const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerH
 camera.position.set(0, 0, 3);
 
 const POST_FX_MODES = [
-  { key: 'high', label: 'High', usePostProcessing: true, bloomResolutionScale: 1.0 },
-  { key: 'medium', label: 'Medium', usePostProcessing: true, bloomResolutionScale: 0.75 },
-  { key: 'low', label: 'Low', usePostProcessing: false, bloomResolutionScale: 0.75 },
+  {
+    key: 'low',
+    label: 'Low',
+    usePostProcessing: false,
+    bloomResolutionScale: 0.75,
+    bloomThreshold: 0.30,
+    bloomStrength: 0.0,
+    bloomRadius: 0.0,
+  },
+  {
+    key: 'medium',
+    label: 'Medium',
+    usePostProcessing: true,
+    bloomResolutionScale: 0.75,
+    bloomThreshold: 0.26,
+    bloomStrength: 0.25,
+    bloomRadius: 0.34,
+  },
+  {
+    key: 'high',
+    label: 'High',
+    usePostProcessing: true,
+    bloomResolutionScale: 1.0,
+    bloomThreshold: 0.22,
+    bloomStrength: 0.32,
+    bloomRadius: 0.40,
+  },
 ];
 let postFxModeIndex = 1;
 let activePostFxMode = POST_FX_MODES[postFxModeIndex];
@@ -66,9 +90,9 @@ const bloomPass = new UnrealBloomPass(
     window.innerHeight * activePostFxMode.bloomResolutionScale
   )
 );
-bloomPass.threshold = 0.15;
-bloomPass.strength = 0.4;
-bloomPass.radius = 0.5;
+bloomPass.threshold = activePostFxMode.bloomThreshold;
+bloomPass.strength = activePostFxMode.bloomStrength;
+bloomPass.radius = activePostFxMode.bloomRadius;
 composer.addPass(bloomPass);
 
 const outputPass = new OutputPass();
@@ -103,6 +127,9 @@ function applyPostFxMode(mode) {
 
   bloomPass.enabled = true;
   outputPass.enabled = true;
+  bloomPass.threshold = mode.bloomThreshold;
+  bloomPass.strength = mode.bloomStrength;
+  bloomPass.radius = mode.bloomRadius;
   bloomPass.setSize(
     window.innerWidth * mode.bloomResolutionScale,
     window.innerHeight * mode.bloomResolutionScale
