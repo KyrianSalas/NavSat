@@ -21,7 +21,9 @@ export class UIManager {
     satelliteData, 
     onSelectSatellite,
     satelliteLimit,
-    onLimitChange
+    onLimitChange,
+    textSpeed,
+    onTextSpeedChange
   }) {
     this.postProcessing = postProcessing;
     this.environmentLayers = environmentLayers;
@@ -32,6 +34,8 @@ export class UIManager {
     
     this.satelliteLimit = satelliteLimit;
     this.onLimitChange = onLimitChange;
+    this.textSpeed = textSpeed;
+    this.onTextSpeedChange = onTextSpeedChange;
 
     this.sidebar = null;
     this.sidebarContent = null;
@@ -84,6 +88,8 @@ export class UIManager {
       createWidget: (title) => this.createWidget(title),
       initialLimit: this.satelliteLimit,
       onLimitChange: this.onLimitChange,
+      initialTextSpeed: this.textSpeed,
+      onTextSpeedChange: this.onTextSpeedChange,
     });
   }
 

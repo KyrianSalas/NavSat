@@ -100,6 +100,10 @@ function initializeSidebar() {
         clearSatellites();
         loadSatellites(currentGroup);
     },
+    textSpeed: calloutTextSpeedMode,
+    onTextSpeedChange: (mode) => {
+      applyCalloutTextSpeed(mode);
+    },
     satelliteData: {
       activeSatellites,
       satelliteDataMap,
@@ -177,6 +181,32 @@ const calloutTyping = {
   stepIntervalMs: 18,
   active: false,
 };
+
+const textSpeedIntervals = {
+  normal: 18,
+  fast: 8,
+};
+
+let calloutTextSpeedMode = 'normal';
+
+function applyCalloutTextSpeed(mode) {
+  calloutTextSpeedMode = mode;
+
+  if (mode === 'disabled') {
+    calloutTyping.active = false;
+    if (calloutTyping.titleTarget) {
+      calloutTyping.titleIndex = calloutTyping.titleTarget.length;
+      infoTitle.textContent = calloutTyping.titleTarget;
+    }
+    if (calloutTyping.detailsTarget) {
+      calloutTyping.detailsIndex = calloutTyping.detailsTarget.length;
+      satelliteDetails.textContent = calloutTyping.detailsTarget;
+    }
+    return;
+  }
+
+  calloutTyping.stepIntervalMs = textSpeedIntervals[mode] || textSpeedIntervals.normal;
+}
 
 const calloutLayout = {
   initialized: false,
@@ -831,9 +861,16 @@ function startCalloutTyping(title, details) {
   calloutTyping.titleIndex = 0;
   calloutTyping.detailsIndex = 0;
   calloutTyping.lastStepMs = performance.now();
-  calloutTyping.active = true;
   infoTitle.textContent = '';
   satelliteDetails.textContent = '';
+
+  if (calloutTextSpeedMode === 'disabled') {
+    applyCalloutTextSpeed('disabled');
+    return;
+  }
+
+  calloutTyping.stepIntervalMs = textSpeedIntervals[calloutTextSpeedMode] || textSpeedIntervals.normal;
+  calloutTyping.active = true;
 }
 
 function startCalloutReveal() {

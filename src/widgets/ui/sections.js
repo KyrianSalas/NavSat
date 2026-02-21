@@ -261,7 +261,14 @@ export function mountSatelliteSearchSection({ sidebarContent, createWidget, sate
   sidebarContent.appendChild(container);
 }
 
-export function mountSatelliteSettingsSection({ sidebarContent, createWidget, initialLimit, onLimitChange }) {
+export function mountSatelliteSettingsSection({
+  sidebarContent,
+  createWidget,
+  initialLimit,
+  onLimitChange,
+  initialTextSpeed,
+  onTextSpeedChange
+}) {
   if (!sidebarContent) return;
 
   const { container, contentArea } = createWidget('Satellite Settings');
@@ -295,6 +302,44 @@ export function mountSatelliteSettingsSection({ sidebarContent, createWidget, in
   row.appendChild(label);
   row.appendChild(input);
   contentArea.appendChild(row);
+
+  const speedRow = document.createElement('div');
+  speedRow.className = 'sidebar-field-row';
+
+  const speedLabel = document.createElement('label');
+  speedLabel.className = 'sidebar-field-label';
+  speedLabel.textContent = 'Text Speed:';
+  speedLabel.htmlFor = 'satellite-text-speed-select';
+
+  const speedSelect = document.createElement('select');
+  speedSelect.id = 'satellite-text-speed-select';
+  speedSelect.className = 'sidebar-field-input';
+
+  const speedOptions = [
+    { value: 'normal', label: 'Normal' },
+    { value: 'fast', label: 'Fast' },
+    { value: 'disabled', label: 'Disable' },
+  ];
+
+  speedOptions.forEach((option) => {
+    const opt = document.createElement('option');
+    opt.value = option.value;
+    opt.textContent = option.label;
+    if (option.value === (initialTextSpeed || 'normal')) {
+      opt.selected = true;
+    }
+    speedSelect.appendChild(opt);
+  });
+
+  speedSelect.addEventListener('change', (e) => {
+    if (onTextSpeedChange) {
+      onTextSpeedChange(e.target.value);
+    }
+  });
+
+  speedRow.appendChild(speedLabel);
+  speedRow.appendChild(speedSelect);
+  contentArea.appendChild(speedRow);
   sidebarContent.appendChild(container);
 }
 
