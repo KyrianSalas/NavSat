@@ -5,7 +5,7 @@ const API_BASE_URL = 'http://localhost:8000/api';
  * @param {string} group - CelesTrak group (visual, active, stations, weather, etc.)
  * @returns {Promise<Array>} Array of satellite data
  */
-export const getTop100Satellites = async (group = 'visual') => {
+export const getAllSatellites = async (group = 'visual') => {
   try {
     const response = await fetch(`${API_BASE_URL}/satellites?group=${group}`);
     if (!response.ok) {
