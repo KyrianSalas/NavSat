@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import * as satellite from 'satellite.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
@@ -369,15 +370,41 @@ export function setupPlanetVisuals({ scene, camera, renderer }) {
   rimLight.position.set(-4, -2, -3);
   scene.add(rimLight);
 
+  const sunDirectionScene = new THREE.Vector3();
+  const SUN_LIGHT_DISTANCE = 8;
+
+  // Keeps illumination aligned with real UTC time.
+  function updateRealTimeSun(date = new Date()) {
+    const julianDay = satellite.jday(date);
+    const { rsun } = satellite.sunPos(julianDay);
+    const gmst = satellite.gstime(date);
+    const sunEcf = satellite.eciToEcf(
+      { x: rsun[0], y: rsun[1], z: rsun[2] },
+      gmst
+    );
+
+    // Scene axes differ from ECF: X->X, Z->Y, -Y->Z.
+    sunDirectionScene.set(sunEcf.x, sunEcf.z, -sunEcf.y);
+    if (sunDirectionScene.lengthSq() < 1e-12) {
+      return;
+    }
+
+    sunDirectionScene.normalize();
+    sunLight.position.copy(sunDirectionScene).multiplyScalar(SUN_LIGHT_DISTANCE);
+    moonLight.position.copy(sunDirectionScene).multiplyScalar(-SUN_LIGHT_DISTANCE * 0.95);
+  }
+
   const atmosphereSunDirection = new THREE.Vector3();
   function updateAtmosphereSunDirection() {
     atmosphereSunDirection.copy(sunLight.position).normalize();
     atmosphereUniforms.sunDirection.value.copy(atmosphereSunDirection);
   }
+  updateRealTimeSun();
   updateAtmosphereSunDirection();
 
   function update() {
     cloudLayer.rotation.y += 0.00008;
+    updateRealTimeSun();
     planetDeformation.update();
     updateAtmosphereSunDirection();
   }
