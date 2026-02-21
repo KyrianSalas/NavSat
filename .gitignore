@@ -1,2 +1,4 @@
 /venv
 /backend/core/.env
+
+/node_modules
