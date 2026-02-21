@@ -1,4 +1,11 @@
-function buildSatelliteMeshes() {
+import * as THREE from 'three';
+import * as satellite from 'satellite.js';
+import { Line2 } from 'three/addons/lines/Line2.js';
+import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
+
+export function buildSatelliteMeshes(params) {
+    const { satelliteDataMap, scene, activeSatellites, getSatelliteColor, TRAIL_POINTS, initialPositions, sharedTrailMaterial, sharedSatGeometry } = params;
+    
     Object.keys(satelliteDataMap).forEach(satId => {
         const jsonData = satelliteDataMap[satId];
         const satrec = satellite.json2satrec(jsonData);
@@ -21,7 +28,7 @@ function buildSatelliteMeshes() {
 
         const trailGeo = new LineGeometry();
         trailGeo.setPositions(initialPositions);
-        trailGeo.setColors(trailColors); // Or your custom colors from the previous step!
+        trailGeo.setColors(trailColors);
 
         const trailLine = new Line2(trailGeo, sharedTrailMaterial);
         scene.add(trailLine);

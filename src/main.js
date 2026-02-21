@@ -177,14 +177,23 @@ function getSatelliteColor(jsonData) {
 
 async function loadSatellites() {
     try {
-        const jsonArray = await service.getAllSatellites("stations");
+        const jsonArray = await service.getAllSatellites();
 
         jsonArray.forEach(satelliteObj => {
             satelliteDataMap[satelliteObj.OBJECT_ID] = satelliteObj;
         });
 
         console.log(`Successfully loaded ${jsonArray.length} satellites.`);
-        buildSatelliteMeshes();
+        buildSatelliteMeshes({
+            satelliteDataMap,
+            scene,
+            activeSatellites,
+            getSatelliteColor,
+            TRAIL_POINTS,
+            initialPositions,
+            sharedTrailMaterial,
+            sharedSatGeometry
+        });
 
     } catch (error) {
         console.error("Failed to load satellites. Check if your Python server is running and CORS is enabled.", error);
