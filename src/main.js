@@ -40,6 +40,9 @@ const normalMap = loader.load('https://unpkg.com/three-globe@2.35.0/example/img/
 
 const specularMap = loader.load('https://unpkg.com/three-globe@2.35.0/example/img/earth-water.png');
 
+const cityLightsMap = loader.load('https://unpkg.com/three-globe@2.35.0/example/img/earth-night.jpg');
+cityLightsMap.colorSpace = THREE.SRGBColorSpace;
+
 // --- Globe (PBR Material) ---
 // metalness kept low — Earth is mostly dielectric
 // roughnessMap uses the specular/water map so oceans appear glossy
@@ -52,10 +55,24 @@ const globe = new THREE.Mesh(
     normalMap: normalMap,
     normalScale: new THREE.Vector2(0.8, 0.8),
     roughnessMap: specularMap,
-    roughness: 1.0,
-    metalness: 0.1,
+    roughness: 0.9,
+    metalness: 0.02,
+    emissive: new THREE.Color(0xffffff),
+    emissiveMap: cityLightsMap,
+    emissiveIntensity: 1.6,
   })
 );
+globe.material.onBeforeCompile = (shader) => {
+  shader.fragmentShader = shader.fragmentShader.replace(
+    '#include <emissivemap_fragment>',
+    `#include <emissivemap_fragment>
+    #if NUM_DIR_LIGHTS > 0
+      float sunNdotL = dot(normal, directionalLights[0].direction);
+      float nightMask = 1.0 - smoothstep(-0.15, 0.08, sunNdotL);
+      totalEmissiveRadiance *= pow(nightMask, 1.5);
+    #endif`
+  );
+};
 scene.add(globe);
 
 // --- Starfield ---
@@ -75,13 +92,16 @@ const stars = new THREE.Points(
 scene.add(stars);
 
 // --- Lighting ---
-// Ambient provides soft fill; directional acts as the sun
+// Hemisphere approximates sky/ground bounce while directional acts as the sun.
+scene.add(new THREE.HemisphereLight(0x8fb8ff, 0x1f120a, 0.25));
 
-scene.add(new THREE.AmbientLight(0xffffff, 0.3));
-
-const sunLight = new THREE.DirectionalLight(0xffffff, 1.5);
+const sunLight = new THREE.DirectionalLight(0xfff1d6, 2.2);
 sunLight.position.set(5, 3, 5);
 scene.add(sunLight);
+
+const rimLight = new THREE.DirectionalLight(0x9fc9ff, 0.08);
+rimLight.position.set(-4, -2, -3);
+scene.add(rimLight);
 
 // --- Resize Handling ---
 
