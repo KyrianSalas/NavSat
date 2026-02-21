@@ -19,7 +19,7 @@ app.add_middleware(
 )
 
 # Include routers
-app.include_router(satellites_router, prefix="/api")
+app.include_router(satellites_router)
 
 @app.get("/")
 def root():
