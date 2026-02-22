@@ -84,8 +84,8 @@ async def cache_satellites(group: str = Query(..., description="CelesTrak group 
 
 @router.get("/satellites")
 async def list_satellites(
-    group: str = Query("visual"),
-    limit: int = Query(1000),
+    group: str = Query("visual", description="CelesTrak group (visual, active, stations, weather, etc.)"),
+    limit: int = Query(1000, description="Max rows to return"),
     offset: int = Query(0)
 ):
     db_response = supabase.table("satellites") \
@@ -108,6 +108,7 @@ async def list_satellites(
                 "OBJECT_NAME": row.get("object_name"),
                 "OBJECT_ID": row.get("object_id"),
                 "NORAD_CAT_ID": row.get("norad_cat_id"),
+                "DESCRIPTION": None,  # Disabled for performance
                 "EPOCH": clean_epoch,
                 "MEAN_MOTION": orb.get("mean_motion"),
                 "ECCENTRICITY": orb.get("eccentricity"),

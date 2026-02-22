@@ -17,6 +17,31 @@ import { setupSatelliteLegend } from './widgets/satelliteLegend.js';
 import { setupAboutOverlay } from './widgets/aboutOverlay.js';
 import * as service from './api/satelliteService.js'
 import { select } from 'three/tsl';
+import { DESCRIPTIONS } from './descriptions.js';
+
+// Load descriptions cache
+let descriptionCache = DESCRIPTIONS;
+console.log(`✓ Loaded ${Object.keys(descriptionCache).length} unique descriptions from module`);
+
+function getDescriptionForSatellite(satelliteName, noradId) {
+  if (!satelliteName) return '';
+  
+  const upper = satelliteName.toUpperCase();
+  
+  // Hardcoded group descriptions (always available instantly)
+  if (upper.includes('STARLINK')) return "Part of SpaceX's Starlink mega-constellation - 5,000+ satellites providing global internet connectivity.";
+  if (upper.includes('ONEWEB')) return "OneWeb satellite providing global broadband coverage to underserved regions.";
+  if (upper.includes('IRIDIUM')) return "Iridium communications satellite enabling calls from anywhere on Earth.";
+  if (upper.includes('GLOBALSTAR')) return "GlobalStar satellite providing emergency distress beacons and mobile coverage.";
+  if (upper.includes('KUIPER')) return "Amazon Kuiper satellite for global internet coverage.";
+  
+  // Check cache for unique descriptions
+  const desc = descriptionCache[String(noradId)];
+  if (desc) {
+    console.log(`Found description for ${noradId}: ${desc.substring(0, 50)}...`);
+  }
+  return desc || '';
+}
 
 // Apply styles
 ensureTopBarStyles();
@@ -107,7 +132,7 @@ const stormSystem = setupStormMarkers(scene);
 
 // --- SATELLITE LIMIT & CACHE STATE ---
 let currentGroup = 'active';
-let currentSatelliteLimit = 14000;
+let currentSatelliteLimit = 15000;
 let fullGroupCache = []
 let currentCountryFilter = 'all';
 
@@ -308,8 +333,8 @@ const calloutTyping = {
 };
 
 const textSpeedIntervals = {
-  normal: 18,
-  fast: 8,
+  normal: 10,
+  fast: 6,
 };
 
 let calloutTextSpeedMode = 'normal';
@@ -1016,7 +1041,7 @@ async function getSatelliteDetailsText(sat) {
     }
   }
   
-  // Format eccentricity with proper exponent notation
+  // Format eccentricity in scientific notation
   let eccentricity = 'N/A';
   if (satData.ECCENTRICITY) {
     const expStr = satData.ECCENTRICITY.toExponential(4);
@@ -1032,19 +1057,27 @@ async function getSatelliteDetailsText(sat) {
   }
   
   const noradId = satData.NORAD_CAT_ID || 'N/A';
+  const satName = satData.OBJECT_NAME || '';
 
-  const details = `Distance: ${Math.round(distanceKm)}km
+  // Get description: always check by name first (hardcoded groups), then unique descriptions
+  let description = getDescriptionForSatellite(satName, String(noradId)) || satData.DESCRIPTION || '';
+  let details = '';
+  details += `Distance: ${Math.round(distanceKm)}km
 Speed: ${speedDisplay}
 Angle: ${Math.round(angleDeg)}°
-
 Period: ${periodDisplay}
 Inclination: ${inclination}°
 Eccentricity: ${eccentricity}
 NORAD ID: ${noradId}
 Launch Date: ${launchDateDisplay}
-Last Updated: ${epochDisplay}`;
+Last Updated: ${epochDisplay} \n`;
 
-  return details;
+// Only render a description when it exists
+if (description) {
+  details += `\n ${description}`;
+}
+
+return details;
 }
 
 const impactFxLayer = new THREE.Group();

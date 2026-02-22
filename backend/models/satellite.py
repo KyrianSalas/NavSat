@@ -19,3 +19,4 @@ class SatelliteData(BaseModel):
     BSTAR: float
     MEAN_MOTION_DOT: float
     MEAN_MOTION_DDOT: float
+    DESCRIPTION: Optional[str] = None
