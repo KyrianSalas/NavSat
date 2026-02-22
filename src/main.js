@@ -158,6 +158,16 @@ controls.dampingFactor = 0.05;
 controls.minDistance = 1.5;
 controls.maxDistance = 10;
 
+// Improve touch UX on mobile and prevent browser pinch-zoom hijacking.
+renderer.domElement.style.touchAction = 'none';
+if (window.matchMedia('(pointer: coarse)').matches) {
+  controls.rotateSpeed = 0.9;
+  controls.zoomSpeed = 1.15;
+}
+['gesturestart', 'gesturechange', 'gestureend'].forEach((eventName) => {
+  renderer.domElement.addEventListener(eventName, (event) => event.preventDefault(), { passive: false });
+});
+
 addUserLocationMarker(scene);
 
 // --- Raycaster for click detection ---
@@ -724,12 +734,14 @@ function updateSatelliteTrail(sat, currentVirtualTimeMs) {
 }
 async function getSatelliteDetailsText(sat) {
   const distanceKm = Math.max(0, sat.altitudeKm || 0);
-  const speedRatio = Math.max(0, (sat.speedKms || 0) / 12.8);
+  const speedKms = Math.max(0, sat.speedKms || 0);
+  const speedKmh = speedKms * 3600;
+  const speedDisplay = `${speedKms.toFixed(2)} km/s (${Math.round(speedKmh).toLocaleString('en-US')} km/h)`;
   const angleDeg = ((sat.angleDeg || 0) + 360) % 360;
   
   const satData = satelliteDataMap[sat.id];
   if (!satData) {
-    return `Distance: ${Math.round(distanceKm)}km\nSpeed: ${speedRatio.toFixed(2)}x\nAngle: ${Math.round(angleDeg)}°`;
+    return `Distance: ${Math.round(distanceKm)}km\nSpeed: ${speedDisplay}\nAngle: ${Math.round(angleDeg)}°`;
   }
 
   // Calculate orbital period from mean motion (revolutions per day)
@@ -803,7 +815,7 @@ async function getSatelliteDetailsText(sat) {
   const noradId = satData.NORAD_CAT_ID || 'N/A';
 
   const details = `Distance: ${Math.round(distanceKm)}km
-Speed: ${speedRatio.toFixed(2)}x
+Speed: ${speedDisplay}
 Angle: ${Math.round(angleDeg)}°
 
 Period: ${periodDisplay}
