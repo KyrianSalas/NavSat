@@ -2086,8 +2086,8 @@ function deselectSatellite() {
   animateCameraToDefaultView();
 }
 
-// Add click event listener
-document.addEventListener('click', (event) => {
+// Only pick satellites/storms when clicking directly on the 3D canvas.
+renderer.domElement.addEventListener('click', (event) => {
   onCanvasClick(event);
 });
 
