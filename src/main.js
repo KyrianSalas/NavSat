@@ -346,7 +346,7 @@ const sharedTrailMaterial = new LineMaterial({
 sharedTrailMaterial.resolution.set(window.innerWidth, window.innerHeight);
 
 function getSatelliteCountryKey(jsonData) {
-  const name = jsonData.OBJECT_NAME.toUpperCase();
+  const name = (jsonData.OBJECT_NAME || '').toUpperCase();
 
   // 1. Soviet / Russian
   // COSMOS, SL- (Soviet launchers), INTERCOSMOS, RESURS, OKEAN, ZARYA (ISS module)
@@ -398,8 +398,7 @@ function getSatelliteCountryKey(jsonData) {
   return 'other';
 }
 
-function getSatelliteColorHex(jsonData) {
-  const countryKey = getSatelliteCountryKey(jsonData);
+function getSatelliteColorHexByCountryKey(countryKey) {
   switch (countryKey) {
     case 'russia':
       return 0xff2222;
@@ -416,6 +415,11 @@ function getSatelliteColorHex(jsonData) {
     default:
       return 0xcc55ff;
   }
+}
+
+function getSatelliteColorHex(jsonData) {
+  const countryKey = jsonData.countryKey || getSatelliteCountryKey(jsonData);
+  return getSatelliteColorHexByCountryKey(countryKey);
 }
 
 function isSatelliteLikelyVisible(sat, nowMs) {
@@ -453,7 +457,7 @@ function getFilteredSatelliteKeys() {
     if (!satData) {
       return false;
     }
-    return getSatelliteCountryKey(satData) === currentCountryFilter;
+    return satData.countryKey === currentCountryFilter;
   });
 }
 
@@ -493,11 +497,11 @@ function buildSatelliteMeshes() {
         const satId = satKeys[index];
         const jsonData = satelliteDataMap[satId];
         
-        // Convert JSON TLE data to a satellite record
-        const satrec = satellite.json2satrec(jsonData);
+        // Reuse parsed satrec cached during ingest.
+        const satrec = jsonData.satrec;
         
         // Apply Geopolitical colour
-        satColor.setHex(getSatelliteColorHex(jsonData));
+        satColor.setHex(getSatelliteColorHexByCountryKey(jsonData.countryKey));
         satInstancedMesh.setColorAt(index, satColor);
 
         let trailGeo = null;
@@ -649,6 +653,8 @@ async function loadSatellites(group = "active") {
             }
 
             chunk.forEach(sat => {
+                sat.countryKey = getSatelliteCountryKey(sat);
+                sat.satrec = satellite.json2satrec(sat);
                 satelliteDataMap[sat.OBJECT_ID] = sat;
             });
 
