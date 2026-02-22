@@ -13,6 +13,31 @@ import { setupGroupSelector } from './widgets/groupSelector.js';
 import { ensureTopBarStyles } from './widgets/ui/styles.js';
 import { setupStormMarkers } from './widgets/stormMarkers.js';
 import * as service from './api/satelliteService.js'
+import { DESCRIPTIONS } from './descriptions.js';
+
+// Load descriptions cache
+let descriptionCache = DESCRIPTIONS;
+console.log(`✓ Loaded ${Object.keys(descriptionCache).length} unique descriptions from module`);
+
+function getDescriptionForSatellite(satelliteName, noradId) {
+  if (!satelliteName) return '';
+  
+  const upper = satelliteName.toUpperCase();
+  
+  // Hardcoded group descriptions (always available instantly)
+  if (upper.includes('STARLINK')) return "Part of SpaceX's Starlink mega-constellation - 5,000+ satellites providing global internet connectivity.";
+  if (upper.includes('ONEWEB')) return "OneWeb satellite providing global broadband coverage to underserved regions.";
+  if (upper.includes('IRIDIUM')) return "Iridium communications satellite enabling calls from anywhere on Earth.";
+  if (upper.includes('GLOBALSTAR')) return "GlobalStar satellite providing emergency distress beacons and mobile coverage.";
+  if (upper.includes('KUIPER')) return "Amazon Kuiper satellite for global internet coverage.";
+  
+  // Check cache for unique descriptions
+  const desc = descriptionCache[String(noradId)];
+  if (desc) {
+    console.log(`Found description for ${noradId}: ${desc.substring(0, 50)}...`);
+  }
+  return desc || '';
+}
 
 // Apply styles
 ensureTopBarStyles();
@@ -616,18 +641,15 @@ async function getSatelliteDetailsText(sat) {
   }
   
   const noradId = satData.NORAD_CAT_ID || 'N/A';
+  const satName = satData.OBJECT_NAME || '';
 
-  const details = `Distance: ${Math.round(distanceKm)}km
-Speed: ${speedRatio.toFixed(2)}x
-Angle: ${Math.round(angleDeg)}°
-
-Period: ${periodDisplay}
-Inclination: ${inclination}°
-Eccentricity: ${eccentricity}
-NORAD ID: ${noradId}
-Launch Date: ${launchDateDisplay}
-Last Updated: ${epochDisplay}`;
-
+  // Get description: always check by name first (hardcoded groups), then unique descriptions
+  let description = getDescriptionForSatellite(satName, String(noradId)) || satData.DESCRIPTION || '';
+  let details = '';
+  if (description) {
+    details += `${description}\n\n`;
+  }
+  details += `Distance: ${Math.round(distanceKm)}km\nSpeed: ${speedRatio.toFixed(2)}x\nAngle: ${Math.round(angleDeg)}°\n\nPeriod: ${periodDisplay}\nInclination: ${inclination}°\nEccentricity: ${eccentricity}\nNORAD ID: ${noradId}\nLaunch Date: ${launchDateDisplay}\nLast Updated: ${epochDisplay}`;
   return details;
 }
 
