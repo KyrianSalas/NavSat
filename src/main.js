@@ -1203,6 +1203,9 @@ function selectSatellite(sat) {
     if (isAnimatingCameraRef.current) {
         return;
     }
+  if (sidebarManager && window.matchMedia('(max-width: 640px)').matches) {
+    sidebarManager.setCollapsed(true);
+  }
   selectedSatellite = sat;
   selectedStorm = null;
   isAnimatingCameraRef.current = true;

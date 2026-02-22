@@ -506,11 +506,23 @@ export function ensureSidebarStyles() {
     @media (max-width: 640px) {
       #${SIDEBAR_ID} {
         width: min(260px, 76vw);
-        padding: 10px;
+        top: calc(env(safe-area-inset-top, 0px) + 8px);
+        height: calc(100dvh - env(safe-area-inset-top, 0px) - 8px);
+        max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 8px);
+        padding: 10px 10px calc(10px + env(safe-area-inset-bottom, 0px));
+        overflow: hidden;
+      }
+
+      #${SIDEBAR_ID} .sidebar-content {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-x: hidden;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
       }
 
       #${SIDEBAR_ID}.is-collapsed .sidebar-topbar {
-        top: 10px;
+        top: calc(env(safe-area-inset-top, 0px) + 10px);
         right: 10px;
         transform: none;
       }
