@@ -372,8 +372,8 @@ function getSatelliteColorHex(jsonData) {
   }
 }
 
-function buildSatelliteMeshes() {
-  const satKeys = Object.keys(satelliteDataMap).filter((satId) => {
+function getFilteredSatelliteKeys() {
+  return Object.keys(satelliteDataMap).filter((satId) => {
     if (currentCountryFilter === 'all') {
       return true;
     }
@@ -383,6 +383,10 @@ function buildSatelliteMeshes() {
     }
     return getSatelliteCountryKey(satData) === currentCountryFilter;
   });
+}
+
+function buildSatelliteMeshes() {
+  const satKeys = getFilteredSatelliteKeys().slice(0, currentSatelliteLimit);
     const numSatellites = satKeys.length;
     
     // 1. CLEANUP: Remove old trails from the scene before clearing the array
@@ -534,13 +538,24 @@ async function loadSatellites(group = "active") {
         initializeSidebar();
         clearSatellites(); 
 
-        // 1. Loop until we hit the currentSatelliteLimit
-        while (loadedCount < currentSatelliteLimit) {
-            
-            // 2. Calculate how many are left to reach the limit
-            const remaining = currentSatelliteLimit - loadedCount;
-            // Fetch either 500 OR whatever is left to reach the limit
-            const limitToFetch = Math.min(CHUNK_SIZE, remaining);
+        // Keep loading until the currently selected filter has enough satellites
+        // (or until the API runs out of data).
+        while (true) {
+            const filteredCount = getFilteredSatelliteKeys().length;
+            if (filteredCount >= currentSatelliteLimit) {
+                break;
+            }
+
+            // For "all", only fetch what we still need. For country filtering,
+            // fetch in fixed chunks so we can find enough matching satellites.
+            const remainingUnfiltered = Math.max(0, currentSatelliteLimit - loadedCount);
+            const limitToFetch = currentCountryFilter === 'all'
+              ? Math.min(CHUNK_SIZE, remainingUnfiltered)
+              : CHUNK_SIZE;
+
+            if (limitToFetch === 0) {
+              break;
+            }
 
             const chunk = await service.getAllSatellites(group, limitToFetch, { 
                 offset: loadedCount,
@@ -549,7 +564,7 @@ async function loadSatellites(group = "active") {
 
             if (loadToken !== satelliteLoadToken) break;
 
-            // 3. If the API runs out of satellites before we hit our limit, stop.
+            // If the API runs out of satellites before we hit our filtered limit, stop.
             if (!chunk || !Array.isArray(chunk) || chunk.length === 0) {
                 console.log("Reached end of database before reaching limit.");
                 break; 
@@ -563,7 +578,8 @@ async function loadSatellites(group = "active") {
             
             buildSatelliteMeshes(); 
             
-            console.log(`Loaded ${loadedCount} / ${currentSatelliteLimit}`);
+            const nextFilteredCount = getFilteredSatelliteKeys().length;
+            console.log(`Loaded ${loadedCount} total | ${nextFilteredCount} matching ${currentCountryFilter}`);
 
             await new Promise(r => setTimeout(r, 0)); 
         }
@@ -596,10 +612,10 @@ countrySelectorConfig = {
     { value: 'india', label: 'India' },
     { value: 'other', label: 'Other' },
   ],
-  onCountryChange: (country) => {
+  onCountryChange: async (country) => {
     currentCountryFilter = country;
     clearSelectedSatelliteState();
-    buildSatelliteMeshes();
+    await loadSatellites(currentGroup);
   }
 };
 
