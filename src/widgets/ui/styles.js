@@ -926,10 +926,10 @@ export function setupProgressBar() {
         bottom: 20px;
         left: 50%;
         transform: translateX(-50%);
-        width: 300px;
+        width: 500px;
         height: 6px;
         background: rgba(30, 50, 90, 0.6);
-        border: 1px solid rgba(100, 160, 255, 0.4);
+        border: 1px solid rgba(69, 163, 255, 0.6);
         border-radius: 3px;
         overflow: hidden;
         z-index: 99;
@@ -945,7 +945,7 @@ export function setupProgressBar() {
 
       #${PROGRESS_BAR_ID}-fill {
         height: 100%;
-        background: linear-gradient(90deg, rgba(88, 152, 232, 0.8), rgba(124, 184, 255, 1));
+        background: linear-gradient(90deg, #74bdff, #45FFFF);
         width: 0%;
         transition: width 0.2s ease;
         box-shadow: 0 0 10px rgba(124, 184, 255, 0.6);
@@ -978,6 +978,7 @@ export function setupProgressBar() {
   return progressBar;
 }
 
+// Get counts and update the bar accordingly
 export function updateProgressBar(currentCount, targetCount) {
   const progressBar = document.getElementById('satellite-progress-bar');
   if (!progressBar) return;
