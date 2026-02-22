@@ -56,9 +56,9 @@ export function ensureSidebarStyles() {
 
     #${SIDEBAR_ID}.is-collapsed .sidebar-topbar {
       position: fixed;
-      top: 25px;
-      right: 8px;
-      transform: translateY(-50%);
+      top: 12px;
+      right: 12px;
+      transform: none;
       justify-content: center;
       margin-bottom: 0;
     }
@@ -510,8 +510,9 @@ export function ensureSidebarStyles() {
       }
 
       #${SIDEBAR_ID}.is-collapsed .sidebar-topbar {
-        top: 6px;
-        right: 6px;
+        top: 10px;
+        right: 10px;
+        transform: none;
       }
 
       .sidebar-collapse-toggle {
@@ -858,17 +859,40 @@ export function ensureTopBarStyles() {
       outline-offset: 1px;
     }
 
-    @media (max-width: 680px) {
+    @media (max-width: 768px) {
       #top-playback-controls {
-        left: -2px;
+        position: fixed;
+        top: auto;
+        left: auto;
+        right: 8px;
+        bottom: 8px;
       }
 
       .playback-panel {
-        width: min(236px, calc(100vw - 16px));
+        width: min(190px, calc(100vw - 20px));
+        padding: 6px 7px;
+        gap: 4px;
+        border-radius: 9px;
+      }
+
+      .playback-panel.is-collapsed {
+        padding-top: 6px;
+        padding-bottom: 6px;
       }
 
       .playback-clock__time {
-        font-size: 1.03rem;
+        font-size: 0.95rem;
+      }
+
+      .playback-clock__date {
+        font-size: 0.56rem;
+      }
+
+      .playback-collapse-toggle {
+        width: 18px;
+        height: 18px;
+        border-radius: 5px;
+        font-size: 11px;
       }
     }
   `;

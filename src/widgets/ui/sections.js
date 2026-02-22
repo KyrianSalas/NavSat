@@ -538,7 +538,8 @@ export function mountPlaybackSection({ onMultiplierChange, onJumpToPresent }) {
   btnContainer.append(resetBtn, jumpBtn);
   controlsBody.append(metaRow, slider, btnContainer);
   wrapper.append(topRow, controlsBody);
-  setCollapsed(false);
+  const isMobileViewport = window.matchMedia('(max-width: 680px)').matches;
+  setCollapsed(isMobileViewport);
 
   return {
     element: wrapper,

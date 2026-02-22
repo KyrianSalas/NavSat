@@ -9,6 +9,7 @@ function setCollapsedState(legend, toggleButton, collapsed) {
 }
 
 export function setupSatelliteLegend({ items = [] } = {}) {
+  const isMobileViewport = window.matchMedia('(max-width: 640px)').matches;
   let legend = document.getElementById(LEGEND_ID);
   if (!legend) {
     legend = document.createElement('aside');
@@ -17,7 +18,7 @@ export function setupSatelliteLegend({ items = [] } = {}) {
     document.body.appendChild(legend);
   }
 
-  const startsCollapsed = legend.classList.contains(LEGEND_COLLAPSED_CLASS);
+  const startsCollapsed = legend.classList.contains(LEGEND_COLLAPSED_CLASS) || isMobileViewport;
   legend.innerHTML = '';
 
   const header = document.createElement('div');

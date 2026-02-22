@@ -55,9 +55,10 @@ export class UIManager {
   }
 
   createSidebarContainer() {
+    const isMobileViewport = window.matchMedia('(max-width: 640px)').matches;
     this.sidebarShell = createSidebarShell({
       sidebarId: SIDEBAR_ID,
-      initialCollapsed: true,
+      initialCollapsed: isMobileViewport,
       onToggleCollapsed: (collapsed) => {
         this.isCollapsed = collapsed;
       },
