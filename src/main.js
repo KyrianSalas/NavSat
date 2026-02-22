@@ -10,8 +10,11 @@ import { setupSidebar } from './widgets/uiManager.js';
 import { addUserLocationMarker } from './widgets/userLocationMarker.js';
 import { centerToUserLocation } from './widgets/centerToUserLocation.js';
 import { setupGroupSelector } from './widgets/groupSelector.js';
+import { setupCountrySelector } from './widgets/countrySelector.js';
 import { ensureTopBarStyles } from './widgets/ui/styles.js';
 import { setupStormMarkers } from './widgets/stormMarkers.js';
+import { setupSatelliteLegend } from './widgets/satelliteLegend.js';
+import { setupAboutOverlay } from './widgets/aboutOverlay.js';
 import * as service from './api/satelliteService.js'
 import { DESCRIPTIONS } from './descriptions.js';
 
@@ -41,6 +44,7 @@ function getDescriptionForSatellite(satelliteName, noradId) {
 
 // Apply styles
 ensureTopBarStyles();
+setupAboutOverlay();
 
 // --- Renderer ---
 
@@ -81,12 +85,25 @@ const planetVisuals = setupPlanetVisuals({ scene, camera, renderer });
 // Sidebar will be set up after satellites load
 let sidebarManager = null;
 let groupSelectorConfig = null;
+let countrySelectorConfig = null;
+let satelliteLegend = null;
 const stormSystem = setupStormMarkers(scene);
 
 // --- SATELLITE LIMIT & CACHE STATE ---
 let currentGroup = 'active';
-let currentSatelliteLimit = 1000;
+let currentSatelliteLimit = 14000;
 let fullGroupCache = []
+let currentCountryFilter = 'all';
+
+const SATELLITE_LEGEND_ITEMS = [
+  { label: 'US / NASA / Starlink', color: '#00ffff' },
+  { label: 'Russia / Soviet', color: '#ff2222' },
+  { label: 'China', color: '#ffcc00' },
+  { label: 'ESA / Europe', color: '#3388ff' },
+  { label: 'Japan', color: '#ffffff' },
+  { label: 'India', color: '#ff8800' },
+  { label: 'Other', color: '#cc55ff' },
+];
 
 function initializeSidebar() {
   if (sidebarManager) {
@@ -112,9 +129,19 @@ function initializeSidebar() {
         clearSatellites();
         loadSatellites(currentGroup);
     },
+    textSpeed: calloutTextSpeedMode,
+    onTextSpeedChange: (mode) => {
+      applyCalloutTextSpeed(mode);
+    },
     satelliteData: {
       activeSatellites,
       satelliteDataMap,
+    },
+    onMultiplierChange: (multiplier) => {
+        timeMultiplier = multiplier;
+    },
+    onJumpToPresent: () => {
+      virtualTimeMs = Date.now(); // Reset virtual clock to real world time
     },
     onSelectSatellite: (sat) => {
       if (typeof selectSatellite === 'function') {
@@ -130,6 +157,19 @@ function initializeSidebar() {
       mountTarget: sidebarManager.sidebarContent,
     });
   }
+
+  if (countrySelectorConfig && sidebarManager && sidebarManager.sidebarContent) {
+    setupCountrySelector({
+      ...countrySelectorConfig,
+      mountTarget: sidebarManager.sidebarContent,
+    });
+  }
+
+  if (!satelliteLegend) {
+    satelliteLegend = setupSatelliteLegend({
+      items: SATELLITE_LEGEND_ITEMS,
+    });
+  }
   
   return sidebarManager;
 }
@@ -141,6 +181,16 @@ controls.enableDamping = true;
 controls.dampingFactor = 0.05;
 controls.minDistance = 1.5;
 controls.maxDistance = 10;
+
+// Improve touch UX on mobile and prevent browser pinch-zoom hijacking.
+renderer.domElement.style.touchAction = 'none';
+if (window.matchMedia('(pointer: coarse)').matches) {
+  controls.rotateSpeed = 0.9;
+  controls.zoomSpeed = 1.15;
+}
+['gesturestart', 'gesturechange', 'gestureend'].forEach((eventName) => {
+  renderer.domElement.addEventListener(eventName, (event) => event.preventDefault(), { passive: false });
+});
 
 addUserLocationMarker(scene);
 
@@ -171,8 +221,14 @@ const infoTitle = document.getElementById('infoTitle');
 const infoCard = document.getElementById('infoCard');
 const satelliteDetails = document.getElementById('satelliteDetails');
 const fireLaserButton = document.getElementById('fireLaserButton');
+const showOrbitButton = document.getElementById('showOrbitButton');
+let currentOrbitLine = null;
+let orbitingSatId = null;
 const infoConnectorPath = document.getElementById('infoConnectorPath');
 const infoConnectorStart = document.getElementById('infoConnectorStart');
+let timeMultiplier = 1.0; // 1.0 = real-time, 2.0 = double speed, -2.0 = reverse
+let virtualTimeMs = Date.now();
+let lastFrameTimeMs = performance.now();
 
 const calloutTyping = {
   titleTarget: '',
@@ -183,6 +239,32 @@ const calloutTyping = {
   stepIntervalMs: 18,
   active: false,
 };
+
+const textSpeedIntervals = {
+  normal: 18,
+  fast: 8,
+};
+
+let calloutTextSpeedMode = 'normal';
+
+function applyCalloutTextSpeed(mode) {
+  calloutTextSpeedMode = mode;
+
+  if (mode === 'disabled') {
+    calloutTyping.active = false;
+    if (calloutTyping.titleTarget) {
+      calloutTyping.titleIndex = calloutTyping.titleTarget.length;
+      infoTitle.textContent = calloutTyping.titleTarget;
+    }
+    if (calloutTyping.detailsTarget) {
+      calloutTyping.detailsIndex = calloutTyping.detailsTarget.length;
+      satelliteDetails.textContent = calloutTyping.detailsTarget;
+    }
+    return;
+  }
+
+  calloutTyping.stepIntervalMs = textSpeedIntervals[mode] || textSpeedIntervals.normal;
+}
 
 const calloutLayout = {
   initialized: false,
@@ -215,6 +297,8 @@ const dummy = new THREE.Object3D();
 let satInstancedMesh;
 const RENDER_TRAILS_THRESHOLD = 500;
 const SATELLITE_UPDATE_INTERVAL_MS = 120;
+const OFFSCREEN_UPDATE_INTERVAL_MS = 450;
+const OFFSCREEN_UPDATE_BATCH_SIZE = 450;
 const EARTH_RADIUS_KM = 6371;
 
 const sharedSatGeometry = new THREE.SphereGeometry(0.005, 8, 8);
@@ -237,6 +321,9 @@ for (let i = 0; i < TRAIL_POINTS; i++) {
 let lastSatelliteUpdateMs = 0;
 let satelliteLoadToken = 0;
 let satelliteLoadController = null;
+let lastOffscreenUpdateMs = 0;
+let offscreenUpdateCursor = 0;
+const visibilityProbeNdc = new THREE.Vector3();
 
 const sharedTrailMaterial = new LineMaterial({
     color: 0xffffff, // Use white so vertex colors show through correctly
@@ -251,89 +338,154 @@ const sharedTrailMaterial = new LineMaterial({
 
 sharedTrailMaterial.resolution.set(window.innerWidth, window.innerHeight);
 
+function getSatelliteCountryKey(jsonData) {
+  const name = jsonData.OBJECT_NAME.toUpperCase();
+
+  // 1. Soviet / Russian
+  // COSMOS, SL- (Soviet launchers), INTERCOSMOS, RESURS, OKEAN, ZARYA (ISS module)
+  if (name.includes('COSMOS') || name.startsWith('SL-') ||
+    name.includes('INTERCOSMOS') || name.includes('RESURS') ||
+    name.includes('OKEAN') || name.includes('ZARYA')) {
+    return 'russia';
+  }
+
+  // 2. Chinese
+  // CZ- (Long March), SHIJIAN, YAOGAN, HXMT, CSS (Chinese Space Station), SZ- (Shenzhou)
+  if (name.startsWith('CZ-') || name.includes('SHIJIAN') ||
+    name.includes('YAOGAN') || name.includes('HXMT') ||
+    name.includes('CSS') || name.startsWith('SZ-')) {
+    return 'china';
+  }
+
+  // 3. European Space Agency / Arianespace
+  // ARIANE, ENVISAT, HELIOS
+  if (name.includes('ARIANE') || name.includes('ENVISAT') || 
+      name.includes('HELIOS') || name.includes('ONEWEB')) {
+    return 'esa';
+  }
+
+  // 4. Japanese
+  // H-2A (Launcher), ALOS, ASTRO, AJISAI, MIDORI, XRISM
+  if (name.includes('H-2A') || name.includes('ALOS') ||
+    name.includes('ASTRO') || name.includes('AJISAI') ||
+    name.includes('MIDORI') || name.includes('XRISM')) {
+    return 'japan';
+  }
+
+  // 5. United States / NASA / Commercial US
+  // ATLAS, DELTA, THOR, TITAN, USA, OAO, SERT, SEASAT, AQUA, HST, ACS3
+  if (name.includes('ATLAS') || name.includes('DELTA') ||
+    name.includes('THOR') || name.includes('TITAN') ||
+    name.startsWith('USA ') || name.includes('OAO') ||
+    name.includes('SERT') || name.includes('SEASAT') ||
+    name.includes('AQUA') || name.includes('HST') || name.includes('ACS3') || name.includes('STARLINK')) {
+    return 'us';
+  }
+
+  // 6. Indian
+  // GSLV
+  if (name.includes('GSLV') || name.includes('INSAT')) {
+    return 'india';
+  }
+
+  return 'other';
+}
+
 function getSatelliteColorHex(jsonData) {
-    const name = jsonData.OBJECT_NAME.toUpperCase();
+  const countryKey = getSatelliteCountryKey(jsonData);
+  switch (countryKey) {
+    case 'russia':
+      return 0xff2222;
+    case 'china':
+      return 0xffcc00;
+    case 'esa':
+      return 0x3388ff;
+    case 'japan':
+      return 0xffffff;
+    case 'india':
+      return 0xff8800;
+    case 'us':
+      return 0x00ffff;
+    default:
+      return 0xcc55ff;
+  }
+}
 
-    // 1. Soviet / Russian (Red)
-    // COSMOS, SL- (Soviet launchers), INTERCOSMOS, RESURS, OKEAN, ZARYA (ISS module)
-    if (name.includes('COSMOS') || name.startsWith('SL-') ||
-        name.includes('INTERCOSMOS') || name.includes('RESURS') ||
-        name.includes('OKEAN') || name.includes('ZARYA')) {
-        return 0xff2222;
+function isSatelliteLikelyVisible(sat) {
+  if (!sat.worldPosition) {
+    return true;
+  }
+  visibilityProbeNdc.copy(sat.worldPosition).project(camera);
+  return (
+    visibilityProbeNdc.z > -1 &&
+    visibilityProbeNdc.z < 1 &&
+    visibilityProbeNdc.x > -1.1 &&
+    visibilityProbeNdc.x < 1.1 &&
+    visibilityProbeNdc.y > -1.1 &&
+    visibilityProbeNdc.y < 1.1
+  );
+}
+
+function getFilteredSatelliteKeys() {
+  return Object.keys(satelliteDataMap).filter((satId) => {
+    if (currentCountryFilter === 'all') {
+      return true;
     }
-
-        // 2. Chinese (Gold / Yellow)
-    // CZ- (Long March), SHIJIAN, YAOGAN, HXMT, CSS (Chinese Space Station), SZ- (Shenzhou)
-    else if (name.startsWith('CZ-') || name.includes('SHIJIAN') ||
-        name.includes('YAOGAN') || name.includes('HXMT') ||
-        name.includes('CSS') || name.startsWith('SZ-')) {
-        return 0xffcc00;
+    const satData = satelliteDataMap[satId];
+    if (!satData) {
+      return false;
     }
-
-        // 3. European Space Agency / Arianespace (Blue)
-    // ARIANE, ENVISAT, HELIOS
-    else if (name.includes('ARIANE') || name.includes('ENVISAT') || name.includes('HELIOS')) {
-        return 0x3388ff;
-    }
-
-        // 4. Japanese (White)
-    // H-2A (Launcher), ALOS, ASTRO, AJISAI, MIDORI, XRISM
-    else if (name.includes('H-2A') || name.includes('ALOS') ||
-        name.includes('ASTRO') || name.includes('AJISAI') ||
-        name.includes('MIDORI') || name.includes('XRISM')) {
-        return 0xffffff;
-    }
-
-        // 5. United States / NASA / Commercial US (Cyan/Light Blue)
-    // ATLAS, DELTA, THOR, TITAN, USA, OAO, SERT, SEASAT, AQUA, HST, ACS3
-    else if (name.includes('ATLAS') || name.includes('DELTA') ||
-        name.includes('THOR') || name.includes('TITAN') ||
-        name.startsWith('USA ') || name.includes('OAO') ||
-        name.includes('SERT') || name.includes('SEASAT') ||
-        name.includes('AQUA') || name.includes('HST') || name.includes('ACS3') || name.includes('STARLINK')) {
-        return 0x00ffff;
-    }
-
-        // 6. Indian (Orange)
-    // GSLV
-    else if (name.includes('GSLV')) {
-        return 0xff8800;
-    }
-
-    // Default Fallback for anything else (e.g., SAOCOM, ISIS, etc.) (Grey/Purple)
-    return 0xcc55ff;
+    return getSatelliteCountryKey(satData) === currentCountryFilter;
+  });
 }
 
 function buildSatelliteMeshes() {
-    const satKeys = Object.keys(satelliteDataMap);
+  const satKeys = getFilteredSatelliteKeys().slice(0, currentSatelliteLimit);
     const numSatellites = satKeys.length;
-    const now = new Date();
-    const gmstNow = satellite.gstime(now);
+    
+    // 1. CLEANUP: Remove old trails from the scene before clearing the array
+    activeSatellites.forEach(sat => {
+        if (sat.trailLine) {
+            scene.remove(sat.trailLine);
+            if (sat.trailGeometry) sat.trailGeometry.dispose();
+        }
+    });
+    activeSatellites.length = 0;
 
-    // 1. Create the InstancedMesh (Geometry, Material, Count)
+    // 2. DISPOSE: Remove the old InstancedMesh entirely to resize for the new count
+    if (satInstancedMesh) {
+        scene.remove(satInstancedMesh);
+        satInstancedMesh.dispose();
+        // If you are using a custom material with textures, dispose it here too
+    }
+
+    // 3. INITIALISE: Create the new mesh for the current total count
     satInstancedMesh = new THREE.InstancedMesh(sharedSatGeometry, sharedSatMaterial, numSatellites);
     satInstancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-
     satInstancedMesh.frustumCulled = false;
-
     scene.add(satInstancedMesh);
 
+    const now = new Date();
+    const gmstNow = satellite.gstime(now);
     const renderTrails = numSatellites < RENDER_TRAILS_THRESHOLD;
     const satColor = new THREE.Color();
 
+    // 4. POPULATE: Loop through ALL currently loaded satellites
     for (let index = 0; index < satKeys.length; index += 1) {
         const satId = satKeys[index];
         const jsonData = satelliteDataMap[satId];
+        
+        // Convert JSON TLE data to a satellite record
         const satrec = satellite.json2satrec(jsonData);
+        
+        // Apply Geopolitical colour
         satColor.setHex(getSatelliteColorHex(jsonData));
-
-        // 2. Set the geopolitical color for this specific instance
         satInstancedMesh.setColorAt(index, satColor);
 
         let trailGeo = null;
         let trailLine = null;
 
-        // 3. Only build heavy Line2 trails if we have a small number of satellites
+        // Create trails only if we are below the performance threshold
         if (renderTrails) {
             const trailColors = [];
             const colorHelper = new THREE.Color();
@@ -351,11 +503,14 @@ function buildSatelliteMeshes() {
             scene.add(trailLine);
         }
 
+        // Calculate initial position for this frame
         const posAndVel = satellite.propagate(satrec, now);
         let altitudeKm = 0;
         let speedKms = 0;
         let angleDeg = 0;
-        if (posAndVel.position && !Number.isNaN(posAndVel.position.x)) {
+        let worldPosition = null;
+
+        if (posAndVel && posAndVel.position && !Number.isNaN(posAndVel.position.x)) {
             const posGd = satellite.eciToGeodetic(posAndVel.position, gmstNow);
             const r = 1 + (posGd.height / EARTH_RADIUS_KM);
             const x = r * Math.cos(posGd.latitude) * Math.cos(posGd.longitude);
@@ -366,6 +521,7 @@ function buildSatelliteMeshes() {
                 dummy.position.set(x, y, z);
                 dummy.updateMatrix();
                 satInstancedMesh.setMatrixAt(index, dummy.matrix);
+                worldPosition = new THREE.Vector3(x, y, z);
             }
 
             altitudeKm = posGd.height;
@@ -379,25 +535,30 @@ function buildSatelliteMeshes() {
             angleDeg = (THREE.MathUtils.radToDeg(Math.atan2(z, x)) + 360) % 360;
         }
 
+        // Add to the active tracking list for the update loop
         activeSatellites.push({
             id: satId,
             satrec: satrec,
-            index: index, // Store its index in the InstancedMesh
+            index: index, 
             trailGeometry: trailGeo,
-            trailLine: trailLine, // Store the line so we can delete it later
+            trailLine: trailLine, 
             trailPositions: trailGeo ? new Float32Array(TRAIL_POINTS * 3) : null,
             altitudeKm,
             speedKms,
-            angleDeg
+            angleDeg,
+            worldPosition,
+            lastUpdateMs: performance.now(),
         });
     }
 
-    // Tell Three.js we updated the colors
+    // 5. UPDATE GPU: Tell Three.js to send the new data to the shaders
     if (satInstancedMesh.instanceColor) {
         satInstancedMesh.instanceColor.needsUpdate = true;
     }
     satInstancedMesh.instanceMatrix.needsUpdate = true;
     lastSatelliteUpdateMs = performance.now();
+    lastOffscreenUpdateMs = 0;
+    offscreenUpdateCursor = 0;
 }
 
 // --- NEW CLEAR LOGIC ---
@@ -425,75 +586,133 @@ function clearSatellites() {
     activeSatellites.length = 0;
 }
 
-async function loadSatellites(group = "active", limit=1000) {
-        const loadToken = ++satelliteLoadToken;
-    if (satelliteLoadController) {
-        satelliteLoadController.abort();
-    }
+async function loadSatellites(group = "active") {
+    const loadToken = ++satelliteLoadToken;
+    const CHUNK_SIZE = 500;
+    let loadedCount = 0;
+
+    if (satelliteLoadController) satelliteLoadController.abort();
     satelliteLoadController = new AbortController();
 
     try {
-        const limitedArray = await service.getAllSatellites(group, limit, {
-            signal: satelliteLoadController.signal,
-        });
-        if (loadToken !== satelliteLoadToken) {
-            return;
-        }
-
-        for (let i = 0; i < limitedArray.length; i += 1) {
-            const satelliteObj = limitedArray[i];
-            satelliteDataMap[satelliteObj.OBJECT_ID] = satelliteObj;
-        }
-
-        console.log(`Successfully rendered ${limitedArray.length} satellites (out of ${fullGroupCache.length} downloaded).`);
-        buildSatelliteMeshes();
         initializeSidebar();
+        clearSatellites(); 
+
+        // Keep loading until the currently selected filter has enough satellites
+        // (or until the API runs out of data).
+        while (true) {
+            const filteredCount = getFilteredSatelliteKeys().length;
+            if (filteredCount >= currentSatelliteLimit) {
+                break;
+            }
+
+            // For "all", only fetch what we still need. For country filtering,
+            // fetch in fixed chunks so we can find enough matching satellites.
+            const remainingUnfiltered = Math.max(0, currentSatelliteLimit - loadedCount);
+            const limitToFetch = currentCountryFilter === 'all'
+              ? Math.min(CHUNK_SIZE, remainingUnfiltered)
+              : CHUNK_SIZE;
+
+            if (limitToFetch === 0) {
+              break;
+            }
+
+            const chunk = await service.getAllSatellites(group, limitToFetch, { 
+                offset: loadedCount,
+                signal: satelliteLoadController.signal 
+            });
+
+            if (loadToken !== satelliteLoadToken) break;
+
+            // If the API runs out of satellites before we hit our filtered limit, stop.
+            if (!chunk || !Array.isArray(chunk) || chunk.length === 0) {
+                console.log("Reached end of database before reaching limit.");
+                break; 
+            }
+
+            chunk.forEach(sat => {
+                satelliteDataMap[sat.OBJECT_ID] = sat;
+            });
+
+            loadedCount += chunk.length;
+            
+            buildSatelliteMeshes(); 
+            
+            const nextFilteredCount = getFilteredSatelliteKeys().length;
+            console.log(`Loaded ${loadedCount} total | ${nextFilteredCount} matching ${currentCountryFilter}`);
+
+            await new Promise(r => setTimeout(r, 0)); 
+        }
 
     } catch (error) {
-        if (error?.name === 'AbortError') {
-            return;
-        }
+        if (error?.name === 'AbortError') return;
         console.error("Failed to load satellites.", error);
-    } finally {
-        if (loadToken === satelliteLoadToken) {
-            satelliteLoadController = null;
-        }
     }
 }
 
-// Ensure the dropdown clears the cache so it triggers a fresh API call
+// Cleaned up the dropdown config to remove the old cache clearing array
 groupSelectorConfig = {
     initialGroup: 'active',
     onGroupChange: async (newGroup) => {
         clearSatellites();
-        fullGroupCache = []; // Clear cache to force a new download
+        currentGroup = newGroup; // Keep the global group state updated
         await loadSatellites(newGroup);
     }
+};
+  
+countrySelectorConfig = {
+  initialCountry: 'all',
+  countries: [
+    { value: 'all', label: 'All Countries' },
+    { value: 'us', label: 'US / NASA / Starlink' },
+    { value: 'russia', label: 'Russia / Soviet' },
+    { value: 'china', label: 'China' },
+    { value: 'esa', label: 'ESA / Europe' },
+    { value: 'japan', label: 'Japan' },
+    { value: 'india', label: 'India' },
+    { value: 'other', label: 'Other' },
+  ],
+  onCountryChange: async (country) => {
+    currentCountryFilter = country;
+    clearSelectedSatelliteState();
+    await loadSatellites(currentGroup);
+  }
 };
 
 loadSatellites("active");
 
 
-// --- 2. THE UPDATE FUNCTION ---
 function updateSatellites() {
     const nowMs = performance.now();
+    
+    // 1. VIRTUAL TIME CALCULATION
+    // Calculate how much real time passed since the last frame
+    const deltaRealTimeMs = nowMs - lastFrameTimeMs;
+    lastFrameTimeMs = nowMs;
+
+    // Advance the virtual clock (e.g., if multiplier is 10, time moves 10x faster)
+    virtualTimeMs += deltaRealTimeMs * timeMultiplier;
+
+    // 2. RATE LIMITING
+    // We still limit the heavy math to ~120ms intervals for performance
     if ((nowMs - lastSatelliteUpdateMs) < SATELLITE_UPDATE_INTERVAL_MS) {
         return;
     }
     lastSatelliteUpdateMs = nowMs;
 
-    const now = new Date();
-    const nowEpochMs = now.getTime();
-    const gmstNow = satellite.gstime(now);
+    // 3. PREPARE SATELLITE MATH
+    const vTimeDate = new Date(virtualTimeMs);
+    const gmstNow = satellite.gstime(vTimeDate);
+    const numActive = activeSatellites.length;
 
-    // Loop through every active satellite
-    for (let satIndex = 0; satIndex < activeSatellites.length; satIndex += 1) {
-        const sat = activeSatellites[satIndex];
-        // A. Update the Main Satellite Dot
-        const posAndVel = satellite.propagate(sat.satrec, now);
+    if (!satInstancedMesh) return;
 
-        // Include the NaN guards here!
-        if (posAndVel.position && !Number.isNaN(posAndVel.position.x)) {
+    function updateSatelliteState(sat) {
+        if (!sat.satrec) return false;
+
+        const posAndVel = satellite.propagate(sat.satrec, vTimeDate);
+
+        if (posAndVel && posAndVel.position && !Number.isNaN(posAndVel.position.x)) {
             const posGd = satellite.eciToGeodetic(posAndVel.position, gmstNow);
             const r = 1 + (posGd.height / EARTH_RADIUS_KM);
 
@@ -501,75 +720,118 @@ function updateSatellites() {
             const y = r * Math.sin(posGd.latitude);
             const z = r * Math.cos(posGd.latitude) * Math.sin(-posGd.longitude);
 
-            // Set the dummy position and update the InstancedMesh at this satellite's index
             dummy.position.set(x, y, z);
+            dummy.scale.setScalar(1);
             dummy.updateMatrix();
-            if (satInstancedMesh) {
-                 satInstancedMesh.setMatrixAt(sat.index, dummy.matrix);
+            satInstancedMesh.setMatrixAt(sat.index, dummy.matrix);
+
+            if (sat.worldPosition) {
+                sat.worldPosition.set(x, y, z);
+            } else {
+                sat.worldPosition = new THREE.Vector3(x, y, z);
             }
+            sat.lastUpdateMs = nowMs;
 
-            sat.altitudeKm = posGd.height;
-            if (posAndVel.velocity && !Number.isNaN(posAndVel.velocity.x)) {
-                sat.speedKms = Math.sqrt(
-                    (posAndVel.velocity.x ** 2) +
-                    (posAndVel.velocity.y ** 2) +
-                    (posAndVel.velocity.z ** 2)
-                );
-            }
-            sat.angleDeg = (THREE.MathUtils.radToDeg(Math.atan2(z, x)) + 360) % 360;
-
-            // Only do the heavy trail math if the trail geometry actually exists
-            if (sat.trailGeometry) {
-                const trailPositions = sat.trailPositions;
-                for (let i = 0; i < TRAIL_POINTS; i++) {
-                    const positionOffset = i * 3;
-                    const timeOffsetMs = (TRAIL_POINTS - 1 - i) * TRAIL_STEP_MS;
-                    const historicalTime = new Date(nowEpochMs - timeOffsetMs);
-                    const pastPosVel = satellite.propagate(sat.satrec, historicalTime);
-
-                    if (pastPosVel.position && !Number.isNaN(pastPosVel.position.x)) {
-                        const pastGmst = satellite.gstime(historicalTime);
-                        const pastGd = satellite.eciToGeodetic(pastPosVel.position, pastGmst);
-                        const pastR = 1 + (pastGd.height / EARTH_RADIUS_KM);
-
-                        const px = pastR * Math.cos(pastGd.latitude) * Math.cos(pastGd.longitude);
-                        const py = pastR * Math.sin(pastGd.latitude);
-                        const pz = pastR * Math.cos(pastGd.latitude) * Math.sin(-pastGd.longitude);
-
-                        if (!Number.isFinite(px) || !Number.isFinite(py) || !Number.isFinite(pz)) {
-                            trailPositions[positionOffset] = 0;
-                            trailPositions[positionOffset + 1] = 0;
-                            trailPositions[positionOffset + 2] = 0;
-                        } else {
-                            trailPositions[positionOffset] = px;
-                            trailPositions[positionOffset + 1] = py;
-                            trailPositions[positionOffset + 2] = pz;
-                        }
-                    } else {
-                        trailPositions[positionOffset] = 0;
-                        trailPositions[positionOffset + 1] = 0;
-                        trailPositions[positionOffset + 2] = 0;
-                    }
+            if (selectedSatellite && selectedSatellite.id === sat.id) {
+                sat.altitudeKm = posGd.height;
+                if (posAndVel.velocity && !Number.isNaN(posAndVel.velocity.x)) {
+                    sat.speedKms = Math.sqrt(
+                        (posAndVel.velocity.x ** 2) +
+                        (posAndVel.velocity.y ** 2) +
+                        (posAndVel.velocity.z ** 2)
+                    );
                 }
-                sat.trailGeometry.setPositions(trailPositions);
+                sat.angleDeg = (THREE.MathUtils.radToDeg(Math.atan2(z, x)) + 360) % 360;
             }
+
+            if (sat.trailGeometry) {
+                updateSatelliteTrail(sat, virtualTimeMs);
+            }
+            return true;
+        }
+
+        // Hide decayed or invalid satellites
+        dummy.position.set(0, 0, 0);
+        dummy.scale.setScalar(0);
+        dummy.updateMatrix();
+        satInstancedMesh.setMatrixAt(sat.index, dummy.matrix);
+        sat.worldPosition = null;
+        sat.lastUpdateMs = nowMs;
+        return true;
+    }
+
+    const highPriority = [];
+    const offscreen = [];
+    for (let i = 0; i < numActive; i++) {
+        const sat = activeSatellites[i];
+        if (selectedSatellite && sat.id === selectedSatellite.id) {
+            highPriority.push(sat);
+            continue;
+        }
+        if (isSatelliteLikelyVisible(sat)) {
+            highPriority.push(sat);
+        } else {
+            offscreen.push(sat);
         }
     }
 
-    // CRITICAL: Tell the GPU the matrices have moved!
-    if (satInstancedMesh) {
+    let didUpdateMatrix = false;
+    for (let i = 0; i < highPriority.length; i++) {
+        didUpdateMatrix = updateSatelliteState(highPriority[i]) || didUpdateMatrix;
+    }
+
+    if (offscreen.length > 0 && (nowMs - lastOffscreenUpdateMs) >= OFFSCREEN_UPDATE_INTERVAL_MS) {
+        const batchSize = Math.min(offscreen.length, OFFSCREEN_UPDATE_BATCH_SIZE);
+        for (let j = 0; j < batchSize; j++) {
+            const offscreenIndex = (offscreenUpdateCursor + j) % offscreen.length;
+            didUpdateMatrix = updateSatelliteState(offscreen[offscreenIndex]) || didUpdateMatrix;
+        }
+        offscreenUpdateCursor = (offscreenUpdateCursor + batchSize) % offscreen.length;
+        lastOffscreenUpdateMs = nowMs;
+    } else if (offscreen.length === 0) {
+        offscreenUpdateCursor = 0;
+    }
+
+    if (didUpdateMatrix) {
         satInstancedMesh.instanceMatrix.needsUpdate = true;
     }
 }
+function updateSatelliteTrail(sat, currentVirtualTimeMs) {
+    const trailPositions = sat.trailPositions;
+    
+    for (let j = 0; j < TRAIL_POINTS; j++) {
+        const positionOffset = j * 3;
+        
+        // Calculate the "past" based on our current virtual clock
+        // This ensures the trail follows the satellite even during time-warp
+        const timeOffsetMs = (TRAIL_POINTS - 1 - j) * TRAIL_STEP_MS;
+        const historicalTime = new Date(currentVirtualTimeMs - timeOffsetMs);
+        
+        const pastPosVel = satellite.propagate(sat.satrec, historicalTime);
 
+        if (pastPosVel && pastPosVel.position && !Number.isNaN(pastPosVel.position.x)) {
+            const pastGmst = satellite.gstime(historicalTime);
+            const pastGd = satellite.eciToGeodetic(pastPosVel.position, pastGmst);
+            const pastR = 1 + (pastGd.height / EARTH_RADIUS_KM);
+
+            trailPositions[positionOffset] = pastR * Math.cos(pastGd.latitude) * Math.cos(pastGd.longitude);
+            trailPositions[positionOffset + 1] = pastR * Math.sin(pastGd.latitude);
+            trailPositions[positionOffset + 2] = pastR * Math.cos(pastGd.latitude) * Math.sin(-pastGd.longitude);
+        }
+    }
+    
+    sat.trailGeometry.setPositions(trailPositions);
+}
 async function getSatelliteDetailsText(sat) {
   const distanceKm = Math.max(0, sat.altitudeKm || 0);
-  const speedRatio = Math.max(0, (sat.speedKms || 0) / 12.8);
+  const speedKms = Math.max(0, sat.speedKms || 0);
+  const speedKmh = speedKms * 3600;
+  const speedDisplay = `${speedKms.toFixed(2)} km/s (${Math.round(speedKmh).toLocaleString('en-US')} km/h)`;
   const angleDeg = ((sat.angleDeg || 0) + 360) % 360;
   
   const satData = satelliteDataMap[sat.id];
   if (!satData) {
-    return `Distance: ${Math.round(distanceKm)}km\nSpeed: ${speedRatio.toFixed(2)}x\nAngle: ${Math.round(angleDeg)}°`;
+    return `Distance: ${Math.round(distanceKm)}km\nSpeed: ${speedDisplay}\nAngle: ${Math.round(angleDeg)}°`;
   }
 
   // Calculate orbital period from mean motion (revolutions per day)
@@ -649,7 +911,17 @@ async function getSatelliteDetailsText(sat) {
   if (description) {
     details += `${description}\n\n`;
   }
-  details += `Distance: ${Math.round(distanceKm)}km\nSpeed: ${speedRatio.toFixed(2)}x\nAngle: ${Math.round(angleDeg)}°\n\nPeriod: ${periodDisplay}\nInclination: ${inclination}°\nEccentricity: ${eccentricity}\nNORAD ID: ${noradId}\nLaunch Date: ${launchDateDisplay}\nLast Updated: ${epochDisplay}`;
+  details += `Distance: ${Math.round(distanceKm)}km
+Speed: ${speedDisplay}
+Angle: ${Math.round(angleDeg)}°
+
+Period: ${periodDisplay}
+Inclination: ${inclination}°
+Eccentricity: ${eccentricity}
+NORAD ID: ${noradId}
+Launch Date: ${launchDateDisplay}
+Last Updated: ${epochDisplay}`;
+
   return details;
 }
 
@@ -795,9 +1067,16 @@ function startCalloutTyping(title, details) {
   calloutTyping.titleIndex = 0;
   calloutTyping.detailsIndex = 0;
   calloutTyping.lastStepMs = performance.now();
-  calloutTyping.active = true;
   infoTitle.textContent = '';
   satelliteDetails.textContent = '';
+
+  if (calloutTextSpeedMode === 'disabled') {
+    applyCalloutTextSpeed('disabled');
+    return;
+  }
+
+  calloutTyping.stepIntervalMs = textSpeedIntervals[calloutTextSpeedMode] || textSpeedIntervals.normal;
+  calloutTyping.active = true;
 }
 
 function startCalloutReveal() {
@@ -859,7 +1138,17 @@ function updateSatelliteCallout() {
     calloutLayout.initialized = false;
     return;
   }
-
+  if (showOrbitButton) {
+    showOrbitButton.disabled = false;
+    // Update button text/active state based on whether this specific sat is orbiting
+    if (selectedSatellite && orbitingSatId === selectedSatellite.id) {
+        showOrbitButton.textContent = 'Hide Orbit';
+        showOrbitButton.classList.add('active');
+    } else {
+        showOrbitButton.textContent = 'Show Orbit';
+        showOrbitButton.classList.remove('active');
+    }
+  }
   if (isAnimatingCameraRef.current) {
     infoBox.classList.remove('visible');
     if (fireLaserButton) {
@@ -992,24 +1281,30 @@ function onCanvasClick(event) {
   // 2. Check for Satellite clicks
   if (satInstancedMesh) {
       const intersects = raycaster.intersectObject(satInstancedMesh);
-      if (intersects.length > 0 && !selectedSatellite && !selectedStorm) {
+      if (intersects.length > 0) {
         const instanceId = intersects[0].instanceId;
         const clickedSat = activeSatellites[instanceId];
-        if (clickedSat) {
+        if (clickedSat && clickedSat !== selectedSatellite) {
           selectSatellite(clickedSat);
         }
-      } else if (selectedSatellite || selectedStorm) {
-        deselectSatellite(); 
+        return;
       }
   }
-}
 
+  if (selectedSatellite || selectedStorm) {
+      deselectSatellite();
+  }
+}
 // Called when the user clicks a satellite
 function selectSatellite(sat) {
     if (isAnimatingCameraRef.current) {
         return;
     }
+  if (sidebarManager && window.matchMedia('(max-width: 640px)').matches) {
+    sidebarManager.setCollapsed(true);
+  }
   selectedSatellite = sat;
+  selectedStorm = null;
   isAnimatingCameraRef.current = true;
   controls.enabled = false;
   calloutLayout.initialized = false;
@@ -1027,7 +1322,7 @@ function selectSatellite(sat) {
     targetSatPosition.setFromMatrixPosition(tempMatrix);
 
     // Zoom into the satellite
-    const zoomDistance = 0.3; // How close to get to satellite
+    const zoomDistance = 0.45; // How close to get to satellite
     const duration = 1000; // milliseconds
     const startTime = Date.now();
 
@@ -1152,6 +1447,9 @@ function clearSelectedSatelliteState() {
   if (fireLaserButton) {
     fireLaserButton.disabled = true;
   }
+  if (showOrbitButton) {
+    showOrbitButton.disabled = true;
+  }
 }
 
 function resetCameraToStartView() {
@@ -1208,10 +1506,121 @@ window.addEventListener('resize', () => {
   sharedTrailMaterial.resolution.set(window.innerWidth, window.innerHeight);
 });
 
+
+
+// 2. Add helper to clear the orbit
+function clearOrbit() {
+  if (currentOrbitLine) {
+    scene.remove(currentOrbitLine);
+    if (currentOrbitLine.geometry) currentOrbitLine.geometry.dispose();
+    currentOrbitLine = null;
+  }
+  orbitingSatId = null;
+  if (showOrbitButton) {
+    showOrbitButton.textContent = 'Show Orbit';
+    showOrbitButton.classList.remove('active');
+  }
+}
+
+// 3. Add function to generate full orbital path points
+function generateOrbitPoints(satrec, periodMinutes) {
+  const points = [];
+  const segments = 120; // smoothness of the circle
+  const startMs = virtualTimeMs; // Use the current simulation time as start
+  
+  for (let i = 0; i <= segments; i++) {
+    const timeOffset = (i / segments) * periodMinutes * 60 * 1000;
+    const time = new Date(startMs + timeOffset);
+    const posAndVel = satellite.propagate(satrec, time);
+    
+    if (posAndVel.position) {
+      const gmst = satellite.gstime(time);
+      const posGd = satellite.eciToGeodetic(posAndVel.position, gmst);
+      const r = 1 + (posGd.height / EARTH_RADIUS_KM);
+      
+      points.push(
+        r * Math.cos(posGd.latitude) * Math.cos(posGd.longitude),
+        r * Math.sin(posGd.latitude),
+        r * Math.cos(posGd.latitude) * Math.sin(-posGd.longitude)
+      );
+    }
+  }
+  return points;
+}
+
+// 4. Update selectSatellite or camera logic to handle the "Zoom Out"
+function zoomToOrbit(sat) {
+  isAnimatingCameraRef.current = true;
+  controls.enabled = false;
+  
+  const tempMatrix = new THREE.Matrix4();
+  const satPos = new THREE.Vector3();
+  satInstancedMesh.getMatrixAt(sat.index, tempMatrix);
+  satPos.setFromMatrixPosition(tempMatrix);
+
+  // Zoom further out to see the full orbit (roughly 3.0 units from center)
+  const targetCameraPos = satPos.clone().normalize().multiplyScalar(3.2);
+  const startTime = Date.now();
+  const startPos = camera.position.clone();
+
+  const animate = () => {
+    const progress = Math.min((Date.now() - startTime) / 1000, 1);
+    const ease = 1 - Math.pow(1 - progress, 3);
+    camera.position.lerpVectors(startPos, targetCameraPos, ease);
+    camera.lookAt(0, 0, 0);
+    if (progress < 1) requestAnimationFrame(animate);
+    else {
+      isAnimatingCameraRef.current = false;
+      controls.enabled = true;
+    }
+  };
+  animate();
+}
+
+// 5. Wire up the button event listener
+showOrbitButton.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (!selectedSatellite) return;
+
+  if (orbitingSatId === selectedSatellite.id) {
+    clearOrbit();
+  } else {
+    // Clear existing orbit if another was selected
+    clearOrbit();
+    
+    const satData = satelliteDataMap[selectedSatellite.id];
+    const period = satData.MEAN_MOTION ? (1440 / satData.MEAN_MOTION) : 90;
+    const points = generateOrbitPoints(selectedSatellite.satrec, period);
+    
+    const geometry = new LineGeometry();
+    geometry.setPositions(points);
+    
+    const material = new LineMaterial({
+      color: getSatelliteColorHex(satData),
+      linewidth: 2,
+      resolution: new THREE.Vector2(window.innerWidth, window.innerHeight),
+      transparent: true,
+      opacity: 0.6
+    });
+
+    currentOrbitLine = new Line2(geometry, material);
+    scene.add(currentOrbitLine);
+    orbitingSatId = selectedSatellite.id;
+    
+    showOrbitButton.textContent = 'Hide Orbit';
+    showOrbitButton.classList.add('active');
+    
+    zoomToOrbit(selectedSatellite);
+  }
+});
+
 // --- Animation Loop ---
 
 renderer.setAnimationLoop(() => {
     updateSatellites();
+    if (sidebarManager) {
+        sidebarManager.updateSimulationClock(virtualTimeMs);
+    }
     planetVisuals.update();
     updateDestructiveEffects();
     updateSatelliteCallout();

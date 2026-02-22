@@ -1,117 +1,84 @@
-# BrisHack Satellite Tracker
+# NavSat - BrisHack Satellite Tracker
+![Vite](https://img.shields.io/badge/vite-%23646CFF.svg?style=for-the-badge&logo=vite&logoColor=white)
+![Threejs](https://img.shields.io/badge/threejs-black?style=for-the-badge&logo=three.js&logoColor=white)
+![NPM](https://img.shields.io/badge/NPM-%23CB3837.svg?style=for-the-badge&logo=npm&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi)
+![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)
+![Postgres](https://img.shields.io/badge/postgres-%23316192.svg?style=for-the-badge&logo=postgresql&logoColor=white)
+![Vercel](https://img.shields.io/badge/vercel-%23000000.svg?style=for-the-badge&logo=vercel&logoColor=white)
+![Render](https://img.shields.io/badge/Render-%46E3B7.svg?style=for-the-badge&logo=render&logoColor=white)
 
-This project is a full-stack satellite tracking platform built for BrisHack. It features a FastAPI backend for real-time and historical satellite data, and a modern frontend for visualization and interaction.
+## Contents
+- [About NavSat](#about-navsat)
+- [Features](#features)
+- [Tech Stack](#tech-stack)
+- [How It Works](#how-it-works)
+- [Project Origins](#project-origins)
+- [Dev team roles](#dev-team-roles)
+- [Fun Facts!](#fun-facts)
+- [License](#license)
+
+## About NavSat
+Navsat is a platform that allows users to interact with orbital satellites in real time. 
+Using [CelesTrak's](https://celestrak.org/) vast array of satellite telemetrics and [Three.js](https://threejs.org) 3D rendering, users
+explore the orbits of thousands of active satellites across our planet, where each satellite is colour coded by the country of origin
 
 ## Features
-- Fetches and validates satellite data from Celeste
-- Stores satellite data in Supabase for caching and historical queries
-- REST API endpoints for satellite information
-- Scheduled updates every two hours
-- Pydantic models for data validation
-- Interactive frontend for satellite visualization and search
+- Real-time satellite position tracking with SGP4 propagation
+- Interactive 3D globe using Three.js
+- Plenty of satellite groups to select (Brightest, Stations, etc...)
+- Detailed orbital statistics for all the nerds
+- Colour coding by geographical location
+- User location visualisation
+- Satellite-focused camera orbiting system
+- Gradient orbital trail for trajectory visualisation
 
 ## Tech Stack
-### Backend
-- **FastAPI**: Web framework for building APIs
-- **Celeste**: Satellite tracking and data provider
-- **Supabase**: Database and authentication backend
-- **Pydantic**: Data validation and settings management
-- **Uvicorn**: ASGI server for FastAPI
-- **Python**: Core language
+- Frontend: Vite, Three.js, satellite.js, npm.js
+- Backend: FastAPI, Supabase PostgreSQL
+- Data Source: CelesTrak Orbital Database
+- Deployment: Vercel, Render
+      
+## How It Works
 
+NavSat fetches real-time TLE (Two-Line Element) data from CelesTrak, a highly prestigious source for satellite orbital information
+& telemetry. The data collected is ran through multiple orbital calculations such as an SGP4 propagation algorithm via satellite.js,
+using this we can calculate satellite positions to a tee in real-time.
+	
+        
+The visualisation continuously updates as the satellites orbit Earth, accurate altitudes, velocities and orbital parameters can be
+found whenever you click on a satellite.
+        
+## Project Origins
+        
+NavSat was developed for BrisHack 2026 by Ewan Friend, Michael Li, Kyrian Salas, Sam Bunting, Jacob Pankowski as an exploration of 
+space technology. We have tried our best to make the interface as engaging as possible to our users, and  we hope you guys enjoy 
+exploring the wonders of our orbital advancements as we have!
+        
+## Dev team roles
+        
+- Ewan Friend: Created this about page! also established the API connections between the CelestTrak telemetry data, the backend, and the frontend. Also added the user location pointer as well as scoping animation (some ui bits too)
+- Michael Li: Developed the 3D graphics and rendering, performance engineering.
+- Jacob Pankowski: Implemented satellite tracking and orbital calculations.
+- Kyrian Salas: Backend API development and database management, DevOps. 
+- Sam Bunting: Designed user interface (UI) and enhanced user experience (UX), incorporated Open API support.
+        
+## Fun Facts!
+        
+-After an aggresive launching campaign, Starlink satellites comprise approximately 65% of all active satellites in low Earth orbit
+-In 1957, Sputnik 1 became the first ever satellite to be launched into Earths orbit
+-After the successful launch of the first, Sputnik 2 became the second satellite to be launched into orbit, also becoming the first
+to carry an animal into orbit, that being Laika: 'the space dog'
 
-### Frontend
+-In order to remain in low earth orbit, a satellite has to travel at 17450 miles per hour, a farther satellite will need to travel
+slower, a geostationary satellite only travels at around 6568 miles per hour
 
-## Setup
-### Backend
-1. Clone the repository
-2. Create a virtual environment and install dependencies
-3. Copy `backend/.env.example` to `backend/.env` and fill in your keys
-4. Run the backend:
-	- For development: `uvicorn backend.main:app --reload`
-	- Or: `python3 backend/main.py reload`
-
-
-### Frontend
-1. Navigate to the frontend directory
-2. Run `npm install` to install dependencies
-3. Run `npm run dev` to start the Vite development server
-
-## Folder Structure
-- `backend/main.py`: FastAPI app entry point
-- `backend/core/config.py`: Configuration and environment variables
-- `backend/models/satellite.py`: Pydantic model for satellite data
-- `backend/services/supabase_service.py`: Supabase integration
-- `backend/api/routes/satellites.py`: API endpoints
-- `frontend/`: Frontend application (React/Svelte/Vue)
-
-## Satellite Loading Optimisations
-The frontend and API client include targeted optimisations to improve how quickly satellites appear and how responsive group switching feels.
-
-### 1. Faster API fallback from local to remote
-- File: `src/api/satelliteService.js`
-- `LOCAL_REQUEST_TIMEOUT_MS` (1100ms) is used for local API requests.
-- If local API is slow/unavailable, the client quickly falls back to `https://api.navsat.co.uk`.
-- Benefit: reduced startup delay when local backend is not running.
-
-### 2. In-memory caching by satellite group
-- File: `src/api/satelliteService.js`
-- `satelliteGroupCache` stores results per group with `SATELLITE_CACHE_TTL_MS` (60 seconds).
-- Benefit: repeat requests for the same group return immediately for a short window.
-
-### 3. In-flight request de-duplication
-- File: `src/api/satelliteService.js`
-- `inflightSatelliteRequests` ensures only one active network request per group at a time.
-- Benefit: avoids duplicate fetches and reduces unnecessary network/CPU load.
-
-### 4. Abort-aware fetching
-- Files: `src/api/satelliteService.js`, `src/main.js`
-- Uses `AbortController` so canceled group loads stop network work early.
-- Benefit: prevents stale results and speeds up rapid group switching.
-
-### 5. Race-safe group switching
-- File: `src/main.js`
-- `satelliteLoadToken` + `satelliteLoadController` ensure only the latest group load can populate the scene.
-- Benefit: older requests cannot overwrite newer selections.
-
-### 6. Initial satellite transform seeded at build time
-- File: `src/main.js`
-- During mesh creation (`buildSatelliteMeshes`), each satellite gets an initial propagated position.
-- Benefit: satellites appear in valid positions sooner after load.
-
-### 7. Throttled satellite orbit updates
-- File: `src/main.js`
-- `SATELLITE_UPDATE_INTERVAL_MS` is set to `120`.
-- Benefit: heavy orbital math runs less frequently, improving frame stability on larger groups.
-- Tradeoff: slightly less smooth motion than per-frame updates.
-
-### 8. Reduced per-update computation
-- File: `src/main.js`
-- Reuses computed values (for example `gmstNow` once per update cycle).
-- Precomputes constants such as `TRAIL_STEP_MS`.
-- Benefit: less repeated math in hot paths.
-
-### 9. Lower allocation pressure (less GC churn)
-- File: `src/main.js`
-- Reuses a shared `THREE.Color` for instance colors.
-- Stores per-satellite `Float32Array` trail buffers (`trailPositions`) and rewrites them in place.
-- Benefit: fewer short-lived allocations during animation updates.
-
-### 10. Faster satellite selection lookup
-- File: `src/main.js`
-- Click handling now uses direct indexing: `activeSatellites[instanceId]`.
-- Benefit: avoids per-click linear search (`find`) across all satellites.
-
-### Tunable performance knobs
-- `src/main.js`: `SATELLITE_UPDATE_INTERVAL_MS`
-  - Lower value = smoother updates, higher CPU usage.
-  - Higher value = better performance, less smooth updates.
-- `src/api/satelliteService.js`: `LOCAL_REQUEST_TIMEOUT_MS`
-  - Lower value = faster remote fallback.
-  - Higher value = waits longer for local backend before fallback.
-- `src/api/satelliteService.js`: `SATELLITE_CACHE_TTL_MS`
-  - Higher value = more cache hits, less freshness.
-  - Lower value = fresher data, more network calls.
+-The first military satellite, GRAB 1, was launched by the US in 1960, it was designed to intercept Soviet radar signals from above
+-When a satellite reaches the end of its lifespan, it is often moved to a 'graveyard orbit' to avoid collitions with satellites that
+still operational; Other satellites are designed to burn up upon re-entry into Earths atmosphere to reduce space debris
+   
+Data sourced from [CelesTrak](https://celestrak.org/NORAD/documentation/gp-data-formats.php)
+Orbit calculations via [satellite.js](https://github.com/shashwatak/satellite-js)
 
 ## License
 MIT

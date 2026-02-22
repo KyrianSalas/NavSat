@@ -83,11 +83,15 @@ async def cache_satellites(group: str = Query(..., description="CelesTrak group 
 
 
 @router.get("/satellites")
-async def list_satellites(group: str = Query("visual", description="CelesTrak group (visual, active, stations, weather, etc.)"), limit: int = Query(1000, description="Max rows to return")):
+async def list_satellites(
+    group: str = Query("visual", description="CelesTrak group (visual, active, stations, weather, etc.)"),
+    limit: int = Query(1000, description="Max rows to return"),
+    offset: int = Query(0)
+):
     db_response = supabase.table("satellites") \
         .select("*, satellite_category_map!inner(category_id, categories!inner(name)), orbital_elements(*)") \
         .eq("satellite_category_map.categories.name", group) \
-        .limit(limit) \
+        .range(offset, offset + limit - 1) \
         .execute()
 
     def format_db_data(data_list):

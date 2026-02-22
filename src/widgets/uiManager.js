@@ -4,12 +4,12 @@ import { SIDEBAR_ID } from './ui/constants.js';
 import { ensureSidebarStyles } from './ui/styles.js';
 import { createWidget as makeWidget } from './ui/widgetFactory.js';
 import { createSidebarShell } from './ui/sidebarShell.js';
-import { setupGroupSelector } from './groupSelector.js';
 import {
   mountEnvironmentLayersSection,
   mountFooterControlsSection,
   mountSatelliteSearchSection,
-  mountSatelliteSettingsSection
+  mountSatelliteSettingsSection,
+  mountPlaybackSection
 } from './ui/sections.js';
 
 export class UIManager {
@@ -21,7 +21,11 @@ export class UIManager {
     satelliteData, 
     onSelectSatellite,
     satelliteLimit,
-    onLimitChange
+    onLimitChange,
+    textSpeed,
+    onTextSpeedChange,
+    onMultiplierChange,
+    onJumpToPresent
   }) {
     this.postProcessing = postProcessing;
     this.environmentLayers = environmentLayers;
@@ -32,12 +36,18 @@ export class UIManager {
     
     this.satelliteLimit = satelliteLimit;
     this.onLimitChange = onLimitChange;
+    this.textSpeed = textSpeed;
+    this.onTextSpeedChange = onTextSpeedChange;
 
     this.sidebar = null;
     this.sidebarContent = null;
     this.collapseButton = null;
     this.sidebarShell = null;
     this.isCollapsed = false;
+    this.lastClockSecond = null;
+
+    this.onMultiplierChange = onMultiplierChange;
+    this.onJumpToPresent = onJumpToPresent;
   }
 
   createWidget(title) {
@@ -45,9 +55,10 @@ export class UIManager {
   }
 
   createSidebarContainer() {
+    const isMobileViewport = window.matchMedia('(max-width: 640px)').matches;
     this.sidebarShell = createSidebarShell({
       sidebarId: SIDEBAR_ID,
-      initialCollapsed: true,
+      initialCollapsed: isMobileViewport,
       onToggleCollapsed: (collapsed) => {
         this.isCollapsed = collapsed;
       },
@@ -77,6 +88,17 @@ export class UIManager {
     });
   }
 
+  updateSimulationClock(timestamp) {
+    if (this.playbackControls && this.playbackControls.updateClock) {
+      const secondBucket = Math.floor(timestamp / 1000);
+      if (secondBucket === this.lastClockSecond) {
+        return;
+      }
+      this.lastClockSecond = secondBucket;
+      this.playbackControls.updateClock(timestamp);
+    }
+  }
+
   // New method for rendering the limit input widget
   mountSatelliteSettingsWidget() {
     mountSatelliteSettingsSection({
@@ -84,6 +106,8 @@ export class UIManager {
       createWidget: (title) => this.createWidget(title),
       initialLimit: this.satelliteLimit,
       onLimitChange: this.onLimitChange,
+      initialTextSpeed: this.textSpeed,
+      onTextSpeedChange: this.onTextSpeedChange,
     });
   }
 
@@ -108,6 +132,15 @@ export class UIManager {
     ensureSidebarStyles();
     this.createSidebarContainer();
     
+
+    this.playbackControls = mountPlaybackSection({
+    onMultiplierChange: (val) => this.onMultiplierChange(val),
+    onJumpToPresent: () => { this.onJumpToPresent(); }
+    });
+
+  // Mount under the actual top bar when present.
+  const topBar = document.querySelector('#topBar') || document.body;
+  topBar.appendChild(this.playbackControls.element);
     // Mount widgets in the desired visual order
     this.mountSatelliteSearchWidget();
     this.mountSatelliteSettingsWidget(); 
