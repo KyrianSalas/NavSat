@@ -167,6 +167,67 @@
         opacity: 0.8;
       }
 
+      @media (max-width: 768px) {
+        header {
+          padding: calc(12px + env(safe-area-inset-top)) 14px 10px;
+        }
+
+        .header-content {
+          gap: 8px;
+          align-items: center;
+        }
+
+        h1 {
+          font-size: 26px;
+          line-height: 1.1;
+        }
+
+        nav {
+          gap: 10px;
+        }
+
+        nav a {
+          font-size: 14px;
+          padding: 2px 6px;
+        }
+
+        main {
+          margin: 26px auto;
+          padding: 0 14px;
+        }
+
+        .section {
+          margin-bottom: 24px;
+          padding: 16px 0 !important;
+        }
+
+        .section h2 {
+          font-size: 17px;
+          margin-bottom: 10px;
+        }
+
+        .section p,
+        .section li {
+          font-size: 14px;
+          line-height: 1.5;
+        }
+
+        .section ul {
+          margin-left: 10px;
+        }
+
+        .section li {
+          margin-bottom: 6px;
+          padding-left: 14px;
+        }
+
+        footer {
+          padding: 24px 14px calc(20px + env(safe-area-inset-bottom));
+          margin-top: 28px;
+          font-size: 11px;
+        }
+      }
+
       body.is-embedded::before,
       body.is-embedded header,
       body.is-embedded footer {

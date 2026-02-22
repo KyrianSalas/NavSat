@@ -39,6 +39,17 @@ function ensureAboutOverlayStyles() {
       border: 0;
       background: #000;
     }
+
+    @media (max-width: 768px) {
+      #aboutOverlay {
+        overscroll-behavior: contain;
+      }
+
+      .about-overlay__surface,
+      .about-overlay__frame {
+        height: 100dvh;
+      }
+    }
   `;
 
   document.head.appendChild(styleTag);
