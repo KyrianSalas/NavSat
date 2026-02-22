@@ -55,6 +55,7 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
+let suppressCanvasClickUntilMs = 0;
 
 const isCoarsePointerDevice = window.matchMedia('(pointer: coarse)').matches;
 const isSmallViewport = window.matchMedia('(max-width: 900px)').matches;
@@ -246,6 +247,7 @@ function setupUiPinchZoomGuard() {
 
   const preventUiPinchZoom = (event) => {
     if (event.touches && event.touches.length > 1 && isUiTarget(event.target)) {
+      suppressCanvasClickUntilMs = performance.now() + 450;
       event.preventDefault();
     }
   };
@@ -255,6 +257,7 @@ function setupUiPinchZoomGuard() {
   ['gesturestart', 'gesturechange', 'gestureend'].forEach((eventName) => {
     document.addEventListener(eventName, (event) => {
       if (isUiTarget(event.target)) {
+        suppressCanvasClickUntilMs = performance.now() + 450;
         event.preventDefault();
       }
     }, { passive: false, capture: true });
@@ -262,6 +265,20 @@ function setupUiPinchZoomGuard() {
 }
 
 setupUiPinchZoomGuard();
+
+// Two-finger gestures on canvas can still produce a synthetic click afterward.
+// Suppress picking briefly after any multi-touch activity.
+document.addEventListener('touchstart', (event) => {
+  if (event.touches && event.touches.length > 1) {
+    suppressCanvasClickUntilMs = performance.now() + 450;
+  }
+}, { passive: true, capture: true });
+
+document.addEventListener('touchmove', (event) => {
+  if (event.touches && event.touches.length > 1) {
+    suppressCanvasClickUntilMs = performance.now() + 450;
+  }
+}, { passive: true, capture: true });
 
 addUserLocationMarker(scene);
 
@@ -2119,6 +2136,9 @@ function deselectSatellite() {
 
 // Only pick satellites/storms when clicking directly on the 3D canvas.
 renderer.domElement.addEventListener('click', (event) => {
+  if (performance.now() < suppressCanvasClickUntilMs) {
+    return;
+  }
   onCanvasClick(event);
 });
 
