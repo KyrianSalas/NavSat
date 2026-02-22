@@ -132,7 +132,7 @@ const stormSystem = setupStormMarkers(scene);
 
 // --- SATELLITE LIMIT & CACHE STATE ---
 let currentGroup = 'active';
-let currentSatelliteLimit = 14000;
+let currentSatelliteLimit = 15000;
 let fullGroupCache = []
 let currentCountryFilter = 'all';
 
@@ -333,8 +333,8 @@ const calloutTyping = {
 };
 
 const textSpeedIntervals = {
-  normal: 18,
-  fast: 8,
+  normal: 10,
+  fast: 6,
 };
 
 let calloutTextSpeedMode = 'normal';
@@ -1041,7 +1041,7 @@ async function getSatelliteDetailsText(sat) {
     }
   }
   
-  // Format eccentricity with proper exponent notation
+  // Format eccentricity in scientific notation
   let eccentricity = 'N/A';
   if (satData.ECCENTRICITY) {
     const expStr = satData.ECCENTRICITY.toExponential(4);
@@ -1062,19 +1062,20 @@ async function getSatelliteDetailsText(sat) {
   // Get description: always check by name first (hardcoded groups), then unique descriptions
   let description = getDescriptionForSatellite(satName, String(noradId)) || satData.DESCRIPTION || '';
   let details = '';
-  if (description) {
-    details += `${description}\n\n`;
-  }
   details += `Distance: ${Math.round(distanceKm)}km
 Speed: ${speedDisplay}
 Angle: ${Math.round(angleDeg)}°
-
 Period: ${periodDisplay}
 Inclination: ${inclination}°
 Eccentricity: ${eccentricity}
 NORAD ID: ${noradId}
 Launch Date: ${launchDateDisplay}
-Last Updated: ${epochDisplay}`;
+Last Updated: ${epochDisplay} \n`;
+
+// Only render a description when it exists
+if (description) {
+  details += `\n ${description}`;
+}
 
 return details;
 }
