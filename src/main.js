@@ -273,6 +273,8 @@ const dummy = new THREE.Object3D();
 let satInstancedMesh;
 const RENDER_TRAILS_THRESHOLD = 500;
 const SATELLITE_UPDATE_INTERVAL_MS = 120;
+const OFFSCREEN_UPDATE_INTERVAL_MS = 450;
+const OFFSCREEN_UPDATE_BATCH_SIZE = 450;
 const EARTH_RADIUS_KM = 6371;
 
 const sharedSatGeometry = new THREE.SphereGeometry(0.005, 8, 8);
@@ -295,6 +297,9 @@ for (let i = 0; i < TRAIL_POINTS; i++) {
 let lastSatelliteUpdateMs = 0;
 let satelliteLoadToken = 0;
 let satelliteLoadController = null;
+let lastOffscreenUpdateMs = 0;
+let offscreenUpdateCursor = 0;
+const visibilityProbeNdc = new THREE.Vector3();
 
 const sharedTrailMaterial = new LineMaterial({
     color: 0xffffff, // Use white so vertex colors show through correctly
@@ -382,6 +387,21 @@ function getSatelliteColorHex(jsonData) {
   }
 }
 
+function isSatelliteLikelyVisible(sat) {
+  if (!sat.worldPosition) {
+    return true;
+  }
+  visibilityProbeNdc.copy(sat.worldPosition).project(camera);
+  return (
+    visibilityProbeNdc.z > -1 &&
+    visibilityProbeNdc.z < 1 &&
+    visibilityProbeNdc.x > -1.1 &&
+    visibilityProbeNdc.x < 1.1 &&
+    visibilityProbeNdc.y > -1.1 &&
+    visibilityProbeNdc.y < 1.1
+  );
+}
+
 function getFilteredSatelliteKeys() {
   return Object.keys(satelliteDataMap).filter((satId) => {
     if (currentCountryFilter === 'all') {
@@ -464,6 +484,7 @@ function buildSatelliteMeshes() {
         let altitudeKm = 0;
         let speedKms = 0;
         let angleDeg = 0;
+        let worldPosition = null;
 
         if (posAndVel && posAndVel.position && !Number.isNaN(posAndVel.position.x)) {
             const posGd = satellite.eciToGeodetic(posAndVel.position, gmstNow);
@@ -476,6 +497,7 @@ function buildSatelliteMeshes() {
                 dummy.position.set(x, y, z);
                 dummy.updateMatrix();
                 satInstancedMesh.setMatrixAt(index, dummy.matrix);
+                worldPosition = new THREE.Vector3(x, y, z);
             }
 
             altitudeKm = posGd.height;
@@ -499,7 +521,9 @@ function buildSatelliteMeshes() {
             trailPositions: trailGeo ? new Float32Array(TRAIL_POINTS * 3) : null,
             altitudeKm,
             speedKms,
-            angleDeg
+            angleDeg,
+            worldPosition,
+            lastUpdateMs: performance.now(),
         });
     }
 
@@ -509,6 +533,8 @@ function buildSatelliteMeshes() {
     }
     satInstancedMesh.instanceMatrix.needsUpdate = true;
     lastSatelliteUpdateMs = performance.now();
+    lastOffscreenUpdateMs = 0;
+    offscreenUpdateCursor = 0;
 }
 
 // --- NEW CLEAR LOGIC ---
@@ -657,13 +683,11 @@ function updateSatellites() {
 
     if (!satInstancedMesh) return;
 
-    for (let i = 0; i < numActive; i++) {
-        const sat = activeSatellites[i];
-        if (!sat.satrec) continue;
+    function updateSatelliteState(sat) {
+        if (!sat.satrec) return false;
 
         const posAndVel = satellite.propagate(sat.satrec, vTimeDate);
 
-        // 4. THE DECAY GUARD
         if (posAndVel && posAndVel.position && !Number.isNaN(posAndVel.position.x)) {
             const posGd = satellite.eciToGeodetic(posAndVel.position, gmstNow);
             const r = 1 + (posGd.height / EARTH_RADIUS_KM);
@@ -672,13 +696,18 @@ function updateSatellites() {
             const y = r * Math.sin(posGd.latitude);
             const z = r * Math.cos(posGd.latitude) * Math.sin(-posGd.longitude);
 
-            // Update 3D Position
             dummy.position.set(x, y, z);
-            dummy.scale.setScalar(1); 
+            dummy.scale.setScalar(1);
             dummy.updateMatrix();
-            satInstancedMesh.setMatrixAt(i, dummy.matrix);
+            satInstancedMesh.setMatrixAt(sat.index, dummy.matrix);
 
-            // 5. SELECTIVE METADATA (Only for clicked satellite)
+            if (sat.worldPosition) {
+                sat.worldPosition.set(x, y, z);
+            } else {
+                sat.worldPosition = new THREE.Vector3(x, y, z);
+            }
+            sat.lastUpdateMs = nowMs;
+
             if (selectedSatellite && selectedSatellite.id === sat.id) {
                 sat.altitudeKm = posGd.height;
                 if (posAndVel.velocity && !Number.isNaN(posAndVel.velocity.x)) {
@@ -691,20 +720,57 @@ function updateSatellites() {
                 sat.angleDeg = (THREE.MathUtils.radToDeg(Math.atan2(z, x)) + 360) % 360;
             }
 
-            // 6. TRAIL UPDATE LOOP
             if (sat.trailGeometry) {
                 updateSatelliteTrail(sat, virtualTimeMs);
             }
+            return true;
+        }
+
+        // Hide decayed or invalid satellites
+        dummy.position.set(0, 0, 0);
+        dummy.scale.setScalar(0);
+        dummy.updateMatrix();
+        satInstancedMesh.setMatrixAt(sat.index, dummy.matrix);
+        sat.worldPosition = null;
+        sat.lastUpdateMs = nowMs;
+        return true;
+    }
+
+    const highPriority = [];
+    const offscreen = [];
+    for (let i = 0; i < numActive; i++) {
+        const sat = activeSatellites[i];
+        if (selectedSatellite && sat.id === selectedSatellite.id) {
+            highPriority.push(sat);
+            continue;
+        }
+        if (isSatelliteLikelyVisible(sat)) {
+            highPriority.push(sat);
         } else {
-            // Hide decayed or invalid satellites
-            dummy.position.set(0, 0, 0);
-            dummy.scale.setScalar(0);
-            dummy.updateMatrix();
-            satInstancedMesh.setMatrixAt(i, dummy.matrix);
+            offscreen.push(sat);
         }
     }
 
-    satInstancedMesh.instanceMatrix.needsUpdate = true;
+    let didUpdateMatrix = false;
+    for (let i = 0; i < highPriority.length; i++) {
+        didUpdateMatrix = updateSatelliteState(highPriority[i]) || didUpdateMatrix;
+    }
+
+    if (offscreen.length > 0 && (nowMs - lastOffscreenUpdateMs) >= OFFSCREEN_UPDATE_INTERVAL_MS) {
+        const batchSize = Math.min(offscreen.length, OFFSCREEN_UPDATE_BATCH_SIZE);
+        for (let j = 0; j < batchSize; j++) {
+            const offscreenIndex = (offscreenUpdateCursor + j) % offscreen.length;
+            didUpdateMatrix = updateSatelliteState(offscreen[offscreenIndex]) || didUpdateMatrix;
+        }
+        offscreenUpdateCursor = (offscreenUpdateCursor + batchSize) % offscreen.length;
+        lastOffscreenUpdateMs = nowMs;
+    } else if (offscreen.length === 0) {
+        offscreenUpdateCursor = 0;
+    }
+
+    if (didUpdateMatrix) {
+        satInstancedMesh.instanceMatrix.needsUpdate = true;
+    }
 }
 function updateSatelliteTrail(sat, currentVirtualTimeMs) {
     const trailPositions = sat.trailPositions;
