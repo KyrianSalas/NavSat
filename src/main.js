@@ -448,7 +448,7 @@ sharedTrailMaterial.resolution.set(window.innerWidth, window.innerHeight);
 function getSatelliteCountryKey(jsonData) {
   const name = (jsonData.OBJECT_NAME || '').toUpperCase();
 
-  // 1. Soviet / Russian
+  // Russia
   // COSMOS, SL- (Soviet launchers), INTERCOSMOS, RESURS, OKEAN, ZARYA (ISS module)
   if (name.includes('COSMOS') || name.startsWith('SL-') ||
     name.includes('INTERCOSMOS') || name.includes('RESURS') ||
@@ -456,7 +456,7 @@ function getSatelliteCountryKey(jsonData) {
     return 'russia';
   }
 
-  // 2. Chinese
+  // China
   // CZ- (Long March), SHIJIAN, YAOGAN, HXMT, CSS (Chinese Space Station), SZ- (Shenzhou)
   if (name.startsWith('CZ-') || name.includes('SHIJIAN') ||
     name.includes('YAOGAN') || name.includes('HXMT') ||
@@ -464,14 +464,14 @@ function getSatelliteCountryKey(jsonData) {
     return 'china';
   }
 
-  // 3. European Space Agency / Arianespace
+  // EU and stuff
   // ARIANE, ENVISAT, HELIOS
   if (name.includes('ARIANE') || name.includes('ENVISAT') || 
       name.includes('HELIOS') || name.includes('ONEWEB')) {
     return 'esa';
   }
 
-  // 4. Japanese
+  // Japan
   // H-2A (Launcher), ALOS, ASTRO, AJISAI, MIDORI, XRISM
   if (name.includes('H-2A') || name.includes('ALOS') ||
     name.includes('ASTRO') || name.includes('AJISAI') ||
@@ -479,7 +479,7 @@ function getSatelliteCountryKey(jsonData) {
     return 'japan';
   }
 
-  // 5. United States / NASA / Commercial US
+  // USA
   // ATLAS, DELTA, THOR, TITAN, USA, OAO, SERT, SEASAT, AQUA, HST, ACS3
   if (name.includes('ATLAS') || name.includes('DELTA') ||
     name.includes('THOR') || name.includes('TITAN') ||
@@ -489,7 +489,7 @@ function getSatelliteCountryKey(jsonData) {
     return 'us';
   }
 
-  // 6. Indian
+  // India
   // GSLV
   if (name.includes('GSLV') || name.includes('INSAT')) {
     return 'india';
