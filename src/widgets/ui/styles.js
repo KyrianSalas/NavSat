@@ -32,7 +32,6 @@ export function ensureSidebarStyles() {
       z-index: 101;
       overflow-x: hidden;
       overflow-y: auto;
-      touch-action: pan-y;
       transition: width 0.2s ease, padding 0.2s ease, background 0.2s ease;
     }
 
@@ -159,12 +158,6 @@ export function ensureSidebarStyles() {
     .sidebar-search-result-item:focus-visible {
       outline: none;
       background: rgba(24, 245, 255, 0.12) !important;
-    }
-
-    .sidebar-search-results {
-      -webkit-overflow-scrolling: touch;
-      overscroll-behavior: contain;
-      touch-action: pan-y;
     }
 
     .sidebar-hint {
@@ -914,56 +907,91 @@ export function ensureTopBarStyles() {
         font-size: 11px;
       }
     }
-
-    @media (hover: none) and (pointer: coarse) {
-      .playback-content {
-        gap: 8px;
-      }
-
-      .playback-slider {
-        margin: 6px 0 10px;
-        height: 30px;
-        padding: 10px 0;
-        touch-action: pan-x;
-        -webkit-tap-highlight-color: transparent;
-      }
-
-      .playback-slider::-webkit-slider-runnable-track {
-        height: 8px;
-      }
-
-      .playback-slider::-webkit-slider-thumb {
-        width: 24px;
-        height: 24px;
-        margin-top: -8px;
-        border-width: 3px;
-      }
-
-      .playback-slider::-moz-range-track {
-        height: 8px;
-      }
-
-      .playback-slider::-moz-range-progress {
-        height: 8px;
-      }
-
-      .playback-slider::-moz-range-thumb {
-        width: 22px;
-        height: 22px;
-        border-width: 3px;
-      }
-
-      .playback-buttons {
-        margin-top: 4px;
-        gap: 7px;
-      }
-
-      .playback-button {
-        min-height: 34px;
-        padding: 8px 10px;
-      }
-    }
   `;
 
   document.head.appendChild(styleTag);
+}
+
+export function setupProgressBar() {
+  const PROGRESS_BAR_ID = 'satellite-progress-bar';
+  const PROGRESS_BAR_STYLE_ID = 'satellite-progress-bar-styles';
+  
+  // Add styles
+  if (!document.getElementById(PROGRESS_BAR_STYLE_ID)) {
+    const styleTag = document.createElement('style');
+    styleTag.id = PROGRESS_BAR_STYLE_ID;
+    styleTag.textContent = `
+      #${PROGRESS_BAR_ID} {
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 300px;
+        height: 6px;
+        background: rgba(30, 50, 90, 0.6);
+        border: 1px solid rgba(100, 160, 255, 0.4);
+        border-radius: 3px;
+        overflow: hidden;
+        z-index: 99;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+        box-shadow: 0 0 20px rgba(88, 152, 232, 0.2);
+        backdrop-filter: blur(8px);
+      }
+
+      #${PROGRESS_BAR_ID}.active {
+        opacity: 1;
+      }
+
+      #${PROGRESS_BAR_ID}-fill {
+        height: 100%;
+        background: linear-gradient(90deg, rgba(88, 152, 232, 0.8), rgba(124, 184, 255, 1));
+        width: 0%;
+        transition: width 0.2s ease;
+        box-shadow: 0 0 10px rgba(124, 184, 255, 0.6);
+      }
+
+      @media (max-width: 600px) {
+        #${PROGRESS_BAR_ID} {
+          width: 200px;
+          bottom: 16px;
+        }
+      }
+    `;
+    document.head.appendChild(styleTag);
+  }
+
+  // Create or get progress bar element
+  let progressBar = document.getElementById(PROGRESS_BAR_ID);
+  if (!progressBar) {
+    progressBar = document.createElement('div');
+    progressBar.id = PROGRESS_BAR_ID;
+    
+    const fillElement = document.createElement('div');
+    fillElement.id = `${PROGRESS_BAR_ID}-fill`;
+    fillElement.style.width = '0%';
+    
+    progressBar.appendChild(fillElement);
+    document.body.appendChild(progressBar);
+  }
+
+  return progressBar;
+}
+
+export function updateProgressBar(currentCount, targetCount) {
+  const progressBar = document.getElementById('satellite-progress-bar');
+  if (!progressBar) return;
+
+  if (currentCount <= 0 || targetCount <= 0) {
+    progressBar.classList.remove('active');
+    return;
+  }
+
+  progressBar.classList.add('active');
+  const percentage = Math.min((currentCount / targetCount) * 100, 100);
+  
+  const fillElement = document.getElementById('satellite-progress-bar-fill');
+  if (fillElement) {
+    fillElement.style.width = `${percentage}%`;
+  }
 }

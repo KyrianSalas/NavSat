@@ -11,7 +11,7 @@ import { addUserLocationMarker } from './widgets/userLocationMarker.js';
 import { centerToUserLocation } from './widgets/centerToUserLocation.js';
 import { setupGroupSelector } from './widgets/groupSelector.js';
 import { setupCountrySelector } from './widgets/countrySelector.js';
-import { ensureTopBarStyles } from './widgets/ui/styles.js';
+import { ensureTopBarStyles, setupProgressBar, updateProgressBar } from './widgets/ui/styles.js';
 import { setupStormMarkers } from './widgets/stormMarkers.js';
 import { setupSatelliteLegend } from './widgets/satelliteLegend.js';
 import { setupAboutOverlay } from './widgets/aboutOverlay.js';
@@ -46,6 +46,7 @@ function getDescriptionForSatellite(satelliteName, noradId) {
 // Apply styles
 ensureTopBarStyles();
 setupAboutOverlay();
+setupProgressBar();
 
 // --- Renderer ---
 
@@ -725,6 +726,7 @@ async function loadSatellites(group = "active") {
 
     try {
         isSatelliteLoadInProgress = true;
+        updateProgressBar(0, currentSatelliteLimit);
         initializeSidebar();
         clearSatellites(); 
 
@@ -776,6 +778,7 @@ async function loadSatellites(group = "active") {
             buildSatelliteMeshes(); 
             
             const nextFilteredCount = getFilteredSatelliteKeys().length;
+            updateProgressBar(nextFilteredCount, currentSatelliteLimit);
             console.log(`Loaded ${loadedCount} total | ${nextFilteredCount} matching ${currentCountryFilter}`);
 
             await new Promise(r => setTimeout(r, 0)); 
@@ -787,6 +790,7 @@ async function loadSatellites(group = "active") {
     } finally {
         if (loadToken === satelliteLoadToken) {
             isSatelliteLoadInProgress = false;
+            updateProgressBar(0, 0);
             if (!earthExplosionTriggered) {
                 // One final pass re-enables trails after chunked loading settles.
                 buildSatelliteMeshes();
