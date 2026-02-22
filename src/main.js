@@ -296,7 +296,9 @@ function measureCalloutTitleWidth(text) {
 const dummy = new THREE.Object3D();
 let satInstancedMesh;
 const RENDER_TRAILS_THRESHOLD = 500;
-const SATELLITE_UPDATE_INTERVAL_MS = 16;
+const MIN_SATELLITE_UPDATE_INTERVAL_MS = 16;
+const MAX_SATELLITE_UPDATE_INTERVAL_MS = 80;
+const MAX_TIME_MULTIPLIER_FOR_FASTEST_UPDATES = 20;
 const OFFSCREEN_UPDATE_INTERVAL_MS = 450;
 const OFFSCREEN_UPDATE_BATCH_SIZE = 450;
 const MIN_OFFSCREEN_UPDATE_INTERVAL_MS = 90;
@@ -709,9 +711,19 @@ function updateSatellites() {
     // Advance the virtual clock (e.g., if multiplier is 10, time moves 10x faster)
     virtualTimeMs += deltaRealTimeMs * timeMultiplier;
 
+    const warpFactor = Math.min(
+        MAX_TIME_MULTIPLIER_FOR_FASTEST_UPDATES,
+        Math.max(1, Math.abs(timeMultiplier))
+    );
+    const warpProgress =
+        Math.log(warpFactor) / Math.log(MAX_TIME_MULTIPLIER_FOR_FASTEST_UPDATES);
+    const adaptiveSatelliteUpdateIntervalMs =
+        MAX_SATELLITE_UPDATE_INTERVAL_MS -
+        ((MAX_SATELLITE_UPDATE_INTERVAL_MS - MIN_SATELLITE_UPDATE_INTERVAL_MS) * warpProgress);
+
     // 2. RATE LIMITING
-    // We still limit the heavy math to ~120ms intervals for performance
-    if ((nowMs - lastSatelliteUpdateMs) < SATELLITE_UPDATE_INTERVAL_MS) {
+    // Run less often at low warp, and approach 16ms by 20x warp.
+    if ((nowMs - lastSatelliteUpdateMs) < adaptiveSatelliteUpdateIntervalMs) {
         return;
     }
     lastSatelliteUpdateMs = nowMs;
@@ -796,7 +808,6 @@ function updateSatellites() {
         didUpdateMatrix = updateSatelliteState(highPriority[i]) || didUpdateMatrix;
     }
 
-    const warpFactor = Math.max(1, Math.abs(timeMultiplier));
     const adaptiveOffscreenIntervalMs = Math.max(
         MIN_OFFSCREEN_UPDATE_INTERVAL_MS,
         OFFSCREEN_UPDATE_INTERVAL_MS / warpFactor
