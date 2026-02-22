@@ -21,6 +21,19 @@ export function createSidebarShell({ sidebarId, initialCollapsed = false, onTogg
   sidebar.append(topBar, sidebarContent);
   document.body.appendChild(sidebar);
 
+  function preventSidebarPinchZoom(event) {
+    if (event.touches && event.touches.length > 1) {
+      event.preventDefault();
+    }
+  }
+
+  // Keep one-finger scrolling, but prevent two-finger pinch zoom over sidebar.
+  sidebar.addEventListener('touchstart', preventSidebarPinchZoom, { passive: false });
+  sidebar.addEventListener('touchmove', preventSidebarPinchZoom, { passive: false });
+  ['gesturestart', 'gesturechange', 'gestureend'].forEach((eventName) => {
+    sidebar.addEventListener(eventName, (event) => event.preventDefault(), { passive: false });
+  });
+
   let collapsed = Boolean(initialCollapsed);
 
   const syncCollapseState = () => {

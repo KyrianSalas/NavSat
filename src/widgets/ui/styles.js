@@ -32,6 +32,7 @@ export function ensureSidebarStyles() {
       z-index: 101;
       overflow-x: hidden;
       overflow-y: auto;
+      touch-action: pan-y;
       transition: width 0.2s ease, padding 0.2s ease, background 0.2s ease;
     }
 
@@ -158,6 +159,12 @@ export function ensureSidebarStyles() {
     .sidebar-search-result-item:focus-visible {
       outline: none;
       background: rgba(24, 245, 255, 0.12) !important;
+    }
+
+    .sidebar-search-results {
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
+      touch-action: pan-y;
     }
 
     .sidebar-hint {
@@ -905,6 +912,55 @@ export function ensureTopBarStyles() {
         height: 18px;
         border-radius: 5px;
         font-size: 11px;
+      }
+    }
+
+    @media (hover: none) and (pointer: coarse) {
+      .playback-content {
+        gap: 8px;
+      }
+
+      .playback-slider {
+        margin: 6px 0 10px;
+        height: 30px;
+        padding: 10px 0;
+        touch-action: pan-x;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      .playback-slider::-webkit-slider-runnable-track {
+        height: 8px;
+      }
+
+      .playback-slider::-webkit-slider-thumb {
+        width: 24px;
+        height: 24px;
+        margin-top: -8px;
+        border-width: 3px;
+      }
+
+      .playback-slider::-moz-range-track {
+        height: 8px;
+      }
+
+      .playback-slider::-moz-range-progress {
+        height: 8px;
+      }
+
+      .playback-slider::-moz-range-thumb {
+        width: 22px;
+        height: 22px;
+        border-width: 3px;
+      }
+
+      .playback-buttons {
+        margin-top: 4px;
+        gap: 7px;
+      }
+
+      .playback-button {
+        min-height: 34px;
+        padding: 8px 10px;
       }
     }
   `;

@@ -40,6 +40,9 @@ export function mountSatelliteSearchSection({ sidebarContent, createWidget, sate
   resultsList.className = 'sidebar-search-results';
   resultsList.style.maxHeight = '300px';
   resultsList.style.overflowY = 'auto';
+  resultsList.style.overscrollBehavior = 'contain';
+  resultsList.style.webkitOverflowScrolling = 'touch';
+  resultsList.style.touchAction = 'pan-y';
   resultsList.style.marginTop = '10px';
   resultsList.style.position = 'relative';
   resultsList.style.border = '1px solid rgba(24, 245, 255, 0.16)';
@@ -60,6 +63,8 @@ export function mountSatelliteSearchSection({ sidebarContent, createWidget, sate
   let entriesCacheKey = '';
   let visibleEntries = [];
   let renderRafId = 0;
+  let touchStartY = 0;
+  let touchMoved = false;
 
   function getEntriesCacheKey() {
     if (!satelliteData || !satelliteData.activeSatellites || !satelliteData.satelliteDataMap) {
@@ -226,7 +231,26 @@ export function mountSatelliteSearchSection({ sidebarContent, createWidget, sate
 
   resultsList.addEventListener('scroll', scheduleRender);
 
+  resultsList.addEventListener('touchstart', (event) => {
+    const touch = event.touches && event.touches[0];
+    touchStartY = touch ? touch.clientY : 0;
+    touchMoved = false;
+  }, { passive: true });
+
+  resultsList.addEventListener('touchmove', (event) => {
+    const touch = event.touches && event.touches[0];
+    if (!touch) {
+      return;
+    }
+    if (Math.abs(touch.clientY - touchStartY) > 7) {
+      touchMoved = true;
+    }
+  }, { passive: true });
+
   virtualContent.addEventListener('click', (event) => {
+    if (touchMoved) {
+      return;
+    }
     const target = event.target.closest('.sidebar-search-result-item');
     if (!target || !target.dataset.index) {
       return;

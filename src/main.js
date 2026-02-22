@@ -56,6 +56,45 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 
+const isCoarsePointerDevice = window.matchMedia('(pointer: coarse)').matches;
+const isSmallViewport = window.matchMedia('(max-width: 900px)').matches;
+const enforcePortraitMode = isCoarsePointerDevice && isSmallViewport;
+let landscapeGuard = null;
+
+if (enforcePortraitMode) {
+  landscapeGuard = document.createElement('div');
+  landscapeGuard.setAttribute('aria-live', 'polite');
+  Object.assign(landscapeGuard.style, {
+    position: 'fixed',
+    inset: '0',
+    zIndex: '100000',
+    display: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    textAlign: 'center',
+    padding: '20px',
+    background: 'radial-gradient(circle at center, rgba(6, 18, 40, 0.97), rgba(3, 9, 20, 0.99))',
+    color: '#d9ecff',
+    fontFamily: '"Electrolize", "Segoe UI", sans-serif',
+    letterSpacing: '0.03em',
+  });
+  landscapeGuard.textContent = 'Portrait mode only. Rotate your device.';
+  document.body.appendChild(landscapeGuard);
+
+  const syncPortraitGuard = () => {
+    const isLandscapeNow = window.matchMedia('(orientation: landscape)').matches;
+    landscapeGuard.style.display = isLandscapeNow ? 'flex' : 'none';
+  };
+
+  syncPortraitGuard();
+  window.addEventListener('resize', syncPortraitGuard);
+  window.addEventListener('orientationchange', syncPortraitGuard);
+
+  if (screen.orientation && typeof screen.orientation.lock === 'function') {
+    screen.orientation.lock('portrait').catch(() => {});
+  }
+}
+
 // --- Scene & Camera ---
 
 const scene = new THREE.Scene();
@@ -1955,12 +1994,19 @@ function animateCameraToDefaultView() {
 }
 
 function resetCameraToDefaultViewImmediate() {
-  isAnimatingCameraRef.current = false;
-  controls.enabled = true;
+  // On touch devices, re-enabling controls on a later frame helps clear
+  // any in-progress gesture state that can survive abrupt camera jumps.
+  controls.enabled = false;
+  isAnimatingCameraRef.current = true;
   camera.position.copy(defaultCameraPosition);
   controls.target.copy(defaultCameraTarget);
   camera.lookAt(defaultCameraTarget);
   controls.update();
+  requestAnimationFrame(() => {
+    controls.update();
+    controls.enabled = true;
+    isAnimatingCameraRef.current = false;
+  });
 }
 
 function clearSelectedSatelliteState() {
