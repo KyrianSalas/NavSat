@@ -187,6 +187,9 @@ const infoTitle = document.getElementById('infoTitle');
 const infoCard = document.getElementById('infoCard');
 const satelliteDetails = document.getElementById('satelliteDetails');
 const fireLaserButton = document.getElementById('fireLaserButton');
+const showOrbitButton = document.getElementById('showOrbitButton');
+let currentOrbitLine = null;
+let orbitingSatId = null;
 const infoConnectorPath = document.getElementById('infoConnectorPath');
 const infoConnectorStart = document.getElementById('infoConnectorStart');
 let timeMultiplier = 1.0; // 1.0 = real-time, 2.0 = double speed, -2.0 = reverse
@@ -1376,10 +1379,6 @@ window.addEventListener('resize', () => {
 });
 
 
-// 1. Add references and state at the top with other UI variables
-const showOrbitButton = document.getElementById('showOrbitButton');
-let currentOrbitLine = null;
-let orbitingSatId = null;
 
 // 2. Add helper to clear the orbit
 function clearOrbit() {
