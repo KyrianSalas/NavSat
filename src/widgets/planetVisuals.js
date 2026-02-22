@@ -19,7 +19,7 @@ export function setupPlanetVisuals({ scene, camera, renderer }) {
     },
     {
       key: 'medium',
-      label: 'Medium',
+      label: 'Mid',
       usePostProcessing: true,
       bloomResolutionScale: 0.75,
       bloomThreshold: 0.26,
