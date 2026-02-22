@@ -523,24 +523,9 @@ export function ensureSidebarStyles() {
       #${SIDEBAR_ID} .sidebar-content {
         flex: 1 1 auto;
         min-height: 0;
-        gap: 14px;
-        padding-top: 4px;
-        padding-bottom: 6px;
         overflow-x: hidden;
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
-      }
-
-      #${SIDEBAR_ID} .sidebar-widget {
-        border-radius: 14px;
-      }
-
-      #${SIDEBAR_ID} .sidebar-widget__title {
-        padding: 13px 12px 11px;
-      }
-
-      #${SIDEBAR_ID} .sidebar-widget__content {
-        padding: 13px 12px 14px;
       }
 
       #${SIDEBAR_ID}.is-collapsed .sidebar-topbar {

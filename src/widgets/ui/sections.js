@@ -116,13 +116,6 @@ export function mountSatelliteSearchSection({ sidebarContent, createWidget, sate
 
   function setResultsVisible(visible) {
     resultsList.style.display = visible ? 'block' : 'none';
-    // iOS Safari can route vertical swipes to the parent scroll container.
-    // While results are open, lock parent scrolling so the list always owns the gesture.
-    if (visible) {
-      sidebarContent.style.overflowY = 'hidden';
-    } else {
-      sidebarContent.style.overflowY = '';
-    }
   }
 
   function renderMessage(text, italic = false) {
@@ -239,14 +232,12 @@ export function mountSatelliteSearchSection({ sidebarContent, createWidget, sate
   resultsList.addEventListener('scroll', scheduleRender);
 
   resultsList.addEventListener('touchstart', (event) => {
-    event.stopPropagation();
     const touch = event.touches && event.touches[0];
     touchStartY = touch ? touch.clientY : 0;
     touchMoved = false;
   }, { passive: true });
 
   resultsList.addEventListener('touchmove', (event) => {
-    event.stopPropagation();
     const touch = event.touches && event.touches[0];
     if (!touch) {
       return;
