@@ -16,6 +16,7 @@ import { setupStormMarkers } from './widgets/stormMarkers.js';
 import { setupSatelliteLegend } from './widgets/satelliteLegend.js';
 import { setupAboutOverlay } from './widgets/aboutOverlay.js';
 import * as service from './api/satelliteService.js'
+import { select } from 'three/tsl';
 import { DESCRIPTIONS } from './descriptions.js';
 
 // Load descriptions cache
@@ -1075,7 +1076,7 @@ NORAD ID: ${noradId}
 Launch Date: ${launchDateDisplay}
 Last Updated: ${epochDisplay}`;
 
-  return details;
+return details;
 }
 
 const impactFxLayer = new THREE.Group();
