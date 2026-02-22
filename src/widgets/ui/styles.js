@@ -906,6 +906,10 @@ export function ensureTopBarStyles() {
         border-radius: 5px;
         font-size: 11px;
       }
+      
+      #satellite-progress-bar {
+        display: none;
+      } 
     }
   `;
 
