@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request, Response
 from postgrest.exceptions import APIError
 from services.satellite_service import get_satellites_by_group, get_satellite_by_id
 from core.config import settings
@@ -105,10 +105,13 @@ async def cache_satellites(
 
 @router.get("/satellites")
 async def list_satellites(
+    response: Response,
     group: str = Query("visual", description="CelesTrak group (visual, active, stations, weather, etc.)"),
-    limit: int = Query(1000, description="Max rows to return"),
+    limit: int = Query(500, ge=1, le=500, description="Max rows to return"),
     offset: int = Query(0)
 ):
+    response.headers["Cache-Control"] = "public, s-maxage=300, stale-while-revalidate=86400"
+
     db_response = supabase.table("satellites") \
         .select("*, satellite_category_map!inner(category_id, categories!inner(name)), orbital_elements(*)") \
         .eq("satellite_category_map.categories.name", group) \
@@ -166,7 +169,8 @@ async def list_satellites(
 
 # Gets a single satellite by ID - Database First
 @router.get("/satellites/{satellite_norad_id}")
-async def get_satellite(satellite_norad_id: str):
+async def get_satellite(satellite_norad_id: str, response: Response):
+    response.headers["Cache-Control"] = "public, s-maxage=300, stale-while-revalidate=86400"
 
     db_res = supabase.table("satellites") \
         .select("*, orbital_elements(*)") \
